@@ -297,15 +297,46 @@ public static class DbSeeder
         await db.SaveChangesAsync();
 
         // ---------------- Employees ----------------
-        db.Employees.AddRange(
+        var employees = new[]
+        {
             new Employee { EmployeeCode = "EMP-2026-00001", Name = "Bilal Hussain", Phone = "0311-1111111", Role = "Driver", Department = "Delivery", JoiningDate = DateTime.UtcNow.AddMonths(-8), Salary = 35000, Status = EmployeeStatus.Active },
             new Employee { EmployeeCode = "EMP-2026-00002", Name = "Kashif Mehmood", Phone = "0322-2222222", Role = "Store Keeper", Department = "Warehouse", JoiningDate = DateTime.UtcNow.AddMonths(-14), Salary = 40000, Status = EmployeeStatus.Active },
             new Employee { EmployeeCode = "EMP-2026-00003", Name = "Nadeem Iqbal", Phone = "0333-3333333", Role = "Processing Staff", Department = "Processing", JoiningDate = DateTime.UtcNow.AddMonths(-20), Salary = 32000, Status = EmployeeStatus.Active },
             new Employee { EmployeeCode = "EMP-2026-00004", Name = "Waqas Ahmed", Phone = "0344-4444444", Role = "Delivery Staff", Department = "Delivery", JoiningDate = DateTime.UtcNow.AddMonths(-5), Salary = 30000, Status = EmployeeStatus.Active }
-        );
+        };
+        db.Employees.AddRange(employees);
+        await db.SaveChangesAsync();
+
+        // Link the demo "delivery" login to its driver Employee record, so the Delivery
+        // role can be scoped to only the deliveries assigned to that employee. Waqas Ahmed
+        // (EMP-2026-00004) is left unlinked to any login, standing in for "another driver"
+        // whose deliveries the demo delivery user must not be able to see or update.
+        users[5].EmployeeId = employees[0].Id;
         await db.SaveChangesAsync();
 
         db.AuditLogs.Add(new AuditLog { UserId = adminId, UserName = "admin", Action = "SEED", Entity = "System", EntityId = "0", Description = "Initial demo data seeded" });
         await db.SaveChangesAsync();
+
+        // The demo data above assigns codes directly (CUST-2026-00001, ...) rather than
+        // through CodeGeneratorService, so advance each backing sequence past the number of
+        // rows just seeded — otherwise the first record created through the API after
+        // seeding would collide with a seeded code and fail on the unique index.
+        await AdvanceSequenceAsync(db, "customer_code_seq", customers.Count);
+        await AdvanceSequenceAsync(db, "supplier_code_seq", suppliers.Count);
+        await AdvanceSequenceAsync(db, "purchase_number_seq", purchaseNo - 1);
+        await AdvanceSequenceAsync(db, "order_number_seq", orderNo - 1);
+        await AdvanceSequenceAsync(db, "invoice_number_seq", invoiceNo - 1);
+        await AdvanceSequenceAsync(db, "payment_number_seq", paymentNo - 1);
+        await AdvanceSequenceAsync(db, "employee_code_seq", employees.Length);
+    }
+
+    private static Task AdvanceSequenceAsync(ApplicationDbContext db, string sequenceName, int seededCount)
+    {
+        // setval's 2-arg form requires a value >= the sequence's minvalue (1), so when
+        // nothing of this type was seeded, mark it "not yet called" at 1 instead — the
+        // next nextval() then correctly still returns 1, matching a fresh sequence.
+        var safeCount = Math.Max(seededCount, 1);
+        var isCalled = seededCount > 0;
+        return db.Database.ExecuteSqlAsync($"SELECT setval({sequenceName}, {safeCount}, {isCalled})");
     }
 }

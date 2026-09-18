@@ -17,15 +17,17 @@ public class PurchasesController : ControllerBase
     private readonly AuditService _audit;
     private readonly CodeGeneratorService _codeGen;
     private readonly InventoryService _inventory;
+    private readonly LedgerService _ledger;
     private readonly CurrentUserService _currentUser;
 
     public PurchasesController(ApplicationDbContext db, AuditService audit, CodeGeneratorService codeGen,
-        InventoryService inventory, CurrentUserService currentUser)
+        InventoryService inventory, LedgerService ledger, CurrentUserService currentUser)
     {
         _db = db;
         _audit = audit;
         _codeGen = codeGen;
         _inventory = inventory;
+        _ledger = ledger;
         _currentUser = currentUser;
     }
 
@@ -64,6 +66,7 @@ public class PurchasesController : ControllerBase
     {
         var supplier = await _db.Suppliers.FindAsync(req.SupplierId);
         if (supplier == null) return BadRequest(new { error = "Supplier not found" });
+        if (!supplier.IsActive) return BadRequest(new { error = $"Supplier '{supplier.Name}' is deactivated and cannot receive new purchases" });
         if (req.PaidAmount < 0) return BadRequest(new { error = "Paid amount cannot be negative" });
 
         await using var tx = await _db.Database.BeginTransactionAsync();
@@ -86,6 +89,7 @@ public class PurchasesController : ControllerBase
             {
                 var product = await _db.Products.FindAsync(itemReq.ProductId);
                 if (product == null) return BadRequest(new { error = $"Product {itemReq.ProductId} not found" });
+                if (!product.IsActive) return BadRequest(new { error = $"Product '{product.Name}' is deactivated and cannot be purchased" });
 
                 var total = itemReq.Quantity * itemReq.Rate;
                 subtotal += total;
@@ -116,8 +120,7 @@ public class PurchasesController : ControllerBase
                     "Purchase", purchase.Id, $"Purchase {purchase.PurchaseNumber}", allowNegative: true);
             }
 
-            supplier.CurrentBalance += purchase.RemainingAmount;
-            supplier.UpdatedAt = DateTime.UtcNow;
+            await _ledger.AdjustSupplierBalanceAsync(supplier.Id, purchase.RemainingAmount);
 
             await _db.SaveChangesAsync();
             await _audit.LogAsync("CREATE", "Purchase", purchase.Id.ToString(),

@@ -7,7 +7,7 @@ public record ExpenseCategoryDto(int Id, string Name);
 
 public record CreateExpenseRequest(
     [Required] int CategoryId,
-    [Range(0.01, double.MaxValue)] decimal Amount,
+    [Range(0.01, 100_000_000)] decimal Amount,
     DateTime? Date,
     string? PaidBy,
     [Required] PaymentMethod PaymentMethod,

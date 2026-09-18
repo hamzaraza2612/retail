@@ -6,7 +6,7 @@ namespace ChickenWholesale.Api.DTOs;
 public record CreatePaymentRequest(
     [Required] int CustomerId,
     int? InvoiceId,
-    [Range(0.01, double.MaxValue)] decimal Amount,
+    [Range(0.01, 100_000_000)] decimal Amount,
     DateTime? PaymentDate,
     [Required] PaymentMethod Method,
     string? Reference,
@@ -21,7 +21,7 @@ public record PaymentDto(
 public record CreateSupplierPaymentRequest(
     [Required] int SupplierId,
     int? PurchaseId,
-    [Range(0.01, double.MaxValue)] decimal Amount,
+    [Range(0.01, 100_000_000)] decimal Amount,
     DateTime? PaymentDate,
     [Required] PaymentMethod Method,
     string? Reference,

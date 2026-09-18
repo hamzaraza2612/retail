@@ -26,25 +26,29 @@ public record UserDto(
     string? Phone,
     bool IsActive,
     DateTime CreatedAt,
-    DateTime? LastLoginAt
+    DateTime? LastLoginAt,
+    int? EmployeeId,
+    string? EmployeeName
 );
 
 public record CreateUserRequest(
     [Required] string Username,
     [Required, EmailAddress] string Email,
-    [Required, MinLength(6)] string Password,
+    [Required, MinLength(8)] string Password,
     [Required] string FullName,
     [Required] UserRole Role,
-    string? Phone
+    string? Phone,
+    int? EmployeeId
 );
 
 public record UpdateUserRequest(
     [Required] string FullName,
     [Required] UserRole Role,
     string? Phone,
-    bool IsActive
+    bool IsActive,
+    int? EmployeeId
 );
 
 public record ChangePasswordRequest(
-    [Required, MinLength(6)] string NewPassword
+    [Required, MinLength(8)] string NewPassword
 );

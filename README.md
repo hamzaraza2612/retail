@@ -48,14 +48,22 @@ cp .env.example .env      # edit passwords/secrets for anything beyond local tes
 docker compose up -d --build
 ```
 
-This starts three containers:
+This starts three containers, each with a Docker healthcheck (`docker compose ps` shows
+`healthy` once ready — `frontend` waits on `api`, `api` waits on `postgres`):
 - `chicken_postgres` — PostgreSQL 16, persisted in the `postgres_data` volume
 - `chicken_api` — the Web API on port `8080` (runs EF Core migrations and seeds demo data automatically on first startup)
 - `chicken_frontend` — the built React app served by nginx on port `8081`, which reverse-proxies `/api/*` to the API container
 
+All three restart automatically (`restart: unless-stopped`) if they crash or the host reboots.
+
 Open **http://localhost:8081** and sign in with one of the demo accounts below.
 
 To stop: `docker compose down` (add `-v` to also drop the database volume).
+
+`POSTGRES_PORT` (default `5432`) is published to the host mainly so you can run the backup
+commands below or connect a GUI client directly; on a hardened production host with no
+need for that, remove the `ports:` mapping under `postgres:` in `docker-compose.yml` so the
+database is only reachable from the `api` container over the internal Docker network.
 
 ## Demo Login Credentials
 
@@ -82,7 +90,7 @@ See `.env.example` for the full list. Key ones:
 |---|---|
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database credentials |
 | `CONNECTION_STRING` | Full Npgsql connection string used by the API container |
-| `JWT_KEY` | Secret used to sign JWTs — **change this in any non-local deployment** |
+| `JWT_KEY` | Secret used to sign JWTs — **change this in any non-local deployment**. The API refuses to start with `ASPNETCORE_ENVIRONMENT=Production` (the Docker default) if this is missing, under 32 characters, or still the placeholder from `.env.example` — generate one with `openssl rand -base64 48` |
 | `JWT_EXPIRY_HOURS` | Token lifetime |
 | `CORS_ALLOWED_ORIGINS` | Origins allowed to call the API directly (only relevant if you bypass the nginx proxy) |
 | `API_PORT` / `FRONTEND_PORT` | Host ports the containers are published on |
@@ -124,15 +132,32 @@ Migrations apply automatically on API startup (both locally and in Docker) — n
 
 ## Running Tests
 
+Tests run against a real, disposable PostgreSQL database (not the EF Core InMemory
+provider) — a Postgres server needs to be reachable at `localhost:5432` with a `postgres`
+superuser whose password matches `change-me-strong-password` (the compose default), or edit
+the maintenance connection string in `tests/ChickenWholesale.Tests/TestHelpers.cs`. The
+easiest way to get one is the project's own `docker compose up -d postgres`. Each test
+creates and uses its own throwaway database (`test_<guid>`), so tests are fully isolated
+and safe to run in any order; they are not cleaned up automatically afterward.
+
 ```bash
+docker compose up -d postgres   # if it isn't already running
 cd backend
 dotnet test
 ```
 
 Covers the business-critical paths: customer/product creation, purchase increasing stock,
-sales order confirmation decreasing stock **exactly once** (idempotency), negative-stock
-prevention, order total calculation, customer payments reducing receivables, and supplier
-payments reducing payables — all against an isolated in-memory database per test.
+sales order confirmation decreasing stock **exactly once** (idempotency), rejecting an
+invalid or repeated status transition, negative-stock prevention, order total calculation,
+customer payments reducing receivables (and rejecting an overpayment against a specific
+invoice), supplier payments reducing payables, deactivated customers/products being
+rejected from new orders, and — run against real concurrent requests, not simulated — two
+workers racing to confirm the same order, where exactly one may succeed.
+
+This deliberately uses a real database instead of InMemory: the concurrency-safety fixes
+compile to real atomic SQL (`ExecuteUpdateAsync`) that the InMemory provider can't
+translate, and InMemory has no row-locking semantics to meaningfully test a race against
+regardless.
 
 ## API Overview
 
@@ -211,6 +236,18 @@ docker exec chicken_postgres pg_dump -U postgres chickenwholesale > backup_$(dat
 cat backup_20260101.sql | docker exec -i chicken_postgres psql -U postgres -d chickenwholesale
 ```
 
+Restoring into the live database name requires it to be empty first (drop and recreate it,
+or restore into a fresh database as shown below) — `psql` will otherwise emit duplicate-key
+errors partway through and leave the target in a mixed state.
+
+**These exact commands were run against this project's own seeded data** as part of
+production-readiness verification: `pg_dump` produced a ~50KB SQL file, it was restored into
+a separate `restore_test_db` database on the same Postgres instance, and every table's row
+count (`Users`, `Customers`, `Suppliers`, `Products`, `Purchases`, `SalesOrders`, `Invoices`,
+`Payments`, `Employees`, `Expenses`, `AuditLogs`) plus a spot-check of actual row content
+(customer balances, a user's bcrypt password hash) matched the source database exactly
+before the test database was dropped. No manual data-fixing was required.
+
 For anything beyond ad-hoc local backups, schedule `pg_dump` via cron and store the output
 off-host.
 
@@ -228,6 +265,25 @@ off-host.
   call explicitly opts into `allowNegative` (used only for purchases, which can only ever
   increase stock).
 - All money columns are `decimal`, never floating point.
+- **Concurrency-safe balance and stock updates.** Stock deduction (`InventoryService`) and
+  every customer/supplier balance change (`LedgerService`) compile to a single atomic SQL
+  `UPDATE ... SET col = col + @delta [WHERE cap-check]` via EF Core's `ExecuteUpdateAsync`,
+  rather than reading a value into memory and writing it back. This closes the classic
+  "Worker A and Worker B both read stock=100, both sell 80" lost-update race: Postgres
+  row-locks on `UPDATE` and re-evaluates the `WHERE` clause against the latest committed
+  row, so a second concurrent oversell/overpayment attempt affects 0 rows and is rejected
+  instead of corrupting the total. `SalesOrdersController.UpdateStatus` uses the same
+  pattern (an atomic conditional status transition) to make order confirmation/cancellation
+  safe against a double-click or two workers acting on the same order at once — the loser
+  gets `409 Conflict`, never a duplicate invoice or double stock deduction. This is
+  exercised directly by `ConfirmSalesOrder_ConcurrentDoubleConfirm_OnlyOneSucceeds` in the
+  test suite, which fires two real concurrent requests against Postgres.
+- **Order status transitions are validated server-side**, not just hidden in the UI — a
+  fixed table in `SalesOrdersController` is the only source of truth for which status
+  changes are legal (e.g. `Draft → Delivered` directly, skipping stock deduction and
+  invoicing, is rejected regardless of how the request is made).
+- Orders and purchases cannot be created against a deactivated customer, supplier, or
+  product.
 
 ## Known Limitations (by design, for a 2-day MVP)
 
@@ -235,5 +291,28 @@ off-host.
   reconciled accounting figure, and is labelled as such in the UI.
 - No WhatsApp/SMS integration, no payroll module, no route optimization — these are
   explicitly out of scope for the MVP (see the task brief's P2 list).
+- Human-readable sequential codes (`CUST-2026-00010`, `PO-2026-00004`, ...) are generated
+  from a dedicated Postgres `SEQUENCE` per entity type (`nextval()`), which is atomic at
+  the database level — concurrent requests creating the same kind of record cannot collide
+  on the same code, with no locking or retry logic needed. Verified with an automated test
+  that fires many concurrent creations and asserts every generated code is unique.
+- The `Delivery` role only sees and can update deliveries assigned to it: each `User` with
+  the `Delivery` role is linked to an `Employee` record (`Users.EmployeeId`), and the
+  delivery list/detail/status-update endpoints filter or reject by that link server-side
+  (not just hidden in the UI) — a delivery worker cannot view or modify another worker's
+  delivery by guessing its ID.
+- No token revocation/blacklist — logging out clears the token client-side only; a stolen
+  JWT remains valid until it expires (`JWT_EXPIRY_HOURS`, default 12h). Changing a user's
+  password (self-service or an admin's "Reset Password") stamps `PasswordChangedAt`, which
+  is embedded in every token issued afterward and re-checked by middleware on every
+  authenticated request — so **any token issued before that password change stops working
+  immediately**, even though it hasn't technically expired yet. This narrows the "stolen
+  token" window to "until the token expires or the owner/an admin changes the password,"
+  without a distributed session/blacklist store. Deactivating a user (`IsActive = false`)
+  is enforced the same way and also takes effect on the next request, not at next login.
+  12 hours was chosen as a practical balance for shift-based staff (cashiers, sales, store
+  workers) who shouldn't have to re-login mid-shift, while still bounding a leaked token's
+  useful life to about a business day; override with `JWT_EXPIRY_HOURS` per deployment.
+- The sidebar layout is desktop-first without a mobile collapse/hamburger menu.
 
 See also [`BUSINESS_WORKFLOW.md`](./BUSINESS_WORKFLOW.md) for how the modules connect end to end.

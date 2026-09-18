@@ -3,6 +3,7 @@ using System;
 using ChickenWholesale.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace ChickenWholesale.Api.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260918105204_AddUserEmployeeLinkAndPasswordStamp")]
+    partial class AddUserEmployeeLinkAndPasswordStamp
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,22 +24,6 @@ namespace ChickenWholesale.Api.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.HasSequence("customer_code_seq");
-
-            modelBuilder.HasSequence("employee_code_seq");
-
-            modelBuilder.HasSequence("invoice_number_seq");
-
-            modelBuilder.HasSequence("order_number_seq");
-
-            modelBuilder.HasSequence("payment_number_seq");
-
-            modelBuilder.HasSequence("purchase_number_seq");
-
-            modelBuilder.HasSequence("supplier_code_seq");
-
-            modelBuilder.HasSequence("supplier_payment_number_seq");
 
             modelBuilder.Entity("ChickenWholesale.Api.Models.AuditLog", b =>
                 {

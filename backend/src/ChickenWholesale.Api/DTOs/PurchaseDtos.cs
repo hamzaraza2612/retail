@@ -5,8 +5,8 @@ namespace ChickenWholesale.Api.DTOs;
 
 public record PurchaseItemRequest(
     [Required] int ProductId,
-    [Range(0.001, double.MaxValue)] decimal Quantity,
-    [Range(0, double.MaxValue)] decimal Rate
+    [Range(0.001, 1_000_000)] decimal Quantity,
+    [Range(0, 100_000_000)] decimal Rate
 );
 
 public record CreatePurchaseRequest(
@@ -14,7 +14,7 @@ public record CreatePurchaseRequest(
     DateTime? PurchaseDate,
     string? InvoiceNumber,
     [Required, MinLength(1)] List<PurchaseItemRequest> Items,
-    [Range(0, double.MaxValue)] decimal PaidAmount,
+    [Range(0, 100_000_000)] decimal PaidAmount,
     string? Notes
 );
 

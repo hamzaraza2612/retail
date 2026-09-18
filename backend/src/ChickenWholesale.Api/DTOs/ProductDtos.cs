@@ -14,9 +14,9 @@ public record CreateProductRequest(
     [Required] string Name,
     [Required] int CategoryId,
     [Required] UnitOfMeasure Unit,
-    [Range(0, double.MaxValue)] decimal PurchasePrice,
-    [Range(0, double.MaxValue)] decimal SalePrice,
-    [Range(0, double.MaxValue)] decimal MinimumStock,
+    [Range(0, 100_000_000)] decimal PurchasePrice,
+    [Range(0, 100_000_000)] decimal SalePrice,
+    [Range(0, 1_000_000)] decimal MinimumStock,
     string? Description
 );
 
@@ -24,9 +24,9 @@ public record UpdateProductRequest(
     [Required] string Name,
     [Required] int CategoryId,
     [Required] UnitOfMeasure Unit,
-    [Range(0, double.MaxValue)] decimal PurchasePrice,
-    [Range(0, double.MaxValue)] decimal SalePrice,
-    [Range(0, double.MaxValue)] decimal MinimumStock,
+    [Range(0, 100_000_000)] decimal PurchasePrice,
+    [Range(0, 100_000_000)] decimal SalePrice,
+    [Range(0, 1_000_000)] decimal MinimumStock,
     string? Description,
     bool IsActive
 );

@@ -38,6 +38,7 @@ export default function OrderDetailPage() {
   const [driverId, setDriverId] = useState<number | "">("");
   const [vehicle, setVehicle] = useState("");
   const [saving, setSaving] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
 
   function load() {
     if (!id) return;
@@ -56,14 +57,21 @@ export default function OrderDetailPage() {
   useEffect(() => { employeesApi.list({ status: "Active", pageSize: 200 }).then((res) => setEmployees(res.data.items)); }, []);
 
   async function handleStatusChange(status: SalesOrderStatus) {
-    if (!order) return;
+    if (!order || statusUpdating) return;
+    setStatusUpdating(true);
     try {
       await ordersApi.updateStatus(order.id, status);
       toast.success(`Order moved to ${status}`);
       setConfirmStatus(null);
       load();
     } catch (err) {
+      // A 409 means someone else (or a double-click) already changed this order —
+      // reload to show the real current state instead of leaving a stale view.
       toast.error(errorMessage(err));
+      setConfirmStatus(null);
+      load();
+    } finally {
+      setStatusUpdating(false);
     }
   }
 
@@ -132,7 +140,7 @@ export default function OrderDetailPage() {
 
       <div className="flex flex-wrap gap-2">
         {nextOptions.map((s) => (
-          <Button key={s} variant={s === "Cancelled" ? "danger" : "primary"} onClick={() => setConfirmStatus(s)}>
+          <Button key={s} variant={s === "Cancelled" ? "danger" : "primary"} disabled={statusUpdating} onClick={() => setConfirmStatus(s)}>
             Mark as {s}
           </Button>
         ))}
@@ -182,7 +190,8 @@ export default function OrderDetailPage() {
               ? "This will restore any deducted stock and reverse the outstanding balance. Continue?"
               : `Change order status to ${confirmStatus}?`
         }
-        confirmLabel="Confirm"
+        confirmLabel={statusUpdating ? "Working…" : "Confirm"}
+        confirmDisabled={statusUpdating}
         danger={confirmStatus === "Cancelled"}
         onConfirm={() => confirmStatus && handleStatusChange(confirmStatus)}
         onCancel={() => setConfirmStatus(null)}

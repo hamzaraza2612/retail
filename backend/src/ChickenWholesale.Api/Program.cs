@@ -15,13 +15,25 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection")
     ?? "Host=localhost;Port=5432;Database=chickenwholesale;Username=postgres;Password=postgres";
 
+const string InsecureDefaultJwtKey = "dev-only-super-secret-key-change-me-please-1234567890";
+const string ExamplePlaceholderJwtKey = "change-me-to-a-long-random-secret-at-least-32-characters";
+
 var jwtKey = builder.Configuration["Jwt:Key"] ?? Environment.GetEnvironmentVariable("JWT_KEY")
-    ?? "dev-only-super-secret-key-change-me-please-1234567890";
+    ?? InsecureDefaultJwtKey;
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "ChickenWholesaleApi";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "ChickenWholesaleClient";
 builder.Configuration["Jwt:Key"] = jwtKey;
 builder.Configuration["Jwt:Issuer"] = jwtIssuer;
 builder.Configuration["Jwt:Audience"] = jwtAudience;
+
+// Fail fast rather than silently signing production tokens with a known/placeholder secret.
+if (builder.Environment.IsProduction() &&
+    (jwtKey.Length < 32 || jwtKey == InsecureDefaultJwtKey || jwtKey == ExamplePlaceholderJwtKey))
+{
+    throw new InvalidOperationException(
+        "Refusing to start in Production with a missing, default, or placeholder Jwt:Key. " +
+        "Set the JWT_KEY environment variable to a unique random secret of at least 32 characters.");
+}
 
 // ---------------- Services ----------------
 builder.Services.AddControllers().AddJsonOptions(opts =>
@@ -58,6 +70,7 @@ builder.Services.AddScoped<CurrentUserService>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<CodeGeneratorService>();
 builder.Services.AddScoped<InventoryService>();
+builder.Services.AddScoped<LedgerService>();
 builder.Services.AddSingleton<JwtService>();
 
 builder.Services.AddAuthentication(options =>
@@ -104,12 +117,16 @@ using (var scope = app.Services.CreateScope())
 // ---------------- Pipeline ----------------
 app.UseMiddleware<ExceptionMiddleware>();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+if (!app.Environment.IsProduction())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.UseCors("Frontend");
 
 app.UseAuthentication();
+app.UseMiddleware<PasswordStampMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

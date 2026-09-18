@@ -36,6 +36,12 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
     ports:
       - "${API_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   frontend:
     build:
@@ -46,9 +52,16 @@ services:
     container_name: chicken_frontend
     restart: unless-stopped
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     ports:
       - "${FRONTEND_PORT:-8081}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80 || curl -sf http://localhost:80 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
 volumes:
   postgres_data:

@@ -16,13 +16,15 @@ public class PaymentsController : ControllerBase
     private readonly ApplicationDbContext _db;
     private readonly AuditService _audit;
     private readonly CodeGeneratorService _codeGen;
+    private readonly LedgerService _ledger;
     private readonly CurrentUserService _currentUser;
 
-    public PaymentsController(ApplicationDbContext db, AuditService audit, CodeGeneratorService codeGen, CurrentUserService currentUser)
+    public PaymentsController(ApplicationDbContext db, AuditService audit, CodeGeneratorService codeGen, LedgerService ledger, CurrentUserService currentUser)
     {
         _db = db;
         _audit = audit;
         _codeGen = codeGen;
+        _ledger = ledger;
         _currentUser = currentUser;
     }
 
@@ -54,7 +56,7 @@ public class PaymentsController : ControllerBase
         Invoice? invoice = null;
         if (req.InvoiceId.HasValue)
         {
-            invoice = await _db.Invoices.Include(i => i.SalesOrder).FirstOrDefaultAsync(i => i.Id == req.InvoiceId);
+            invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.Id == req.InvoiceId);
             if (invoice == null) return BadRequest(new { error = "Invoice not found" });
             if (invoice.CustomerId != req.CustomerId) return BadRequest(new { error = "Invoice does not belong to this customer" });
             if (req.Amount > invoice.BalanceAmount)
@@ -78,24 +80,20 @@ public class PaymentsController : ControllerBase
             };
             _db.Payments.Add(payment);
 
-            customer.CurrentBalance -= req.Amount;
-            customer.UpdatedAt = DateTime.UtcNow;
-
             if (invoice != null)
             {
-                invoice.PaidAmount += req.Amount;
-                invoice.BalanceAmount -= req.Amount;
-                invoice.PaymentStatus = invoice.BalanceAmount <= 0 ? PaymentStatus.Paid
-                    : (invoice.PaidAmount > 0 ? PaymentStatus.Partial : PaymentStatus.Unpaid);
-
-                if (invoice.SalesOrder != null)
+                // Re-checked here atomically: the pre-check above is only a fast-fail for
+                // the common case — a concurrent payment against the same invoice could
+                // have shrunk its balance between that check and now.
+                var result = await _ledger.ApplyInvoicePaymentAsync(invoice.Id, req.Amount);
+                if (!result.Success)
                 {
-                    invoice.SalesOrder.PaidAmount += req.Amount;
-                    invoice.SalesOrder.RemainingAmount -= req.Amount;
-                    invoice.SalesOrder.PaymentStatus = invoice.PaymentStatus;
-                    invoice.SalesOrder.UpdatedAt = DateTime.UtcNow;
+                    await tx.RollbackAsync();
+                    return BadRequest(new { error = "Amount exceeds the invoice's current outstanding balance (it may have just been paid by another transaction). Please refresh and try again." });
                 }
             }
+
+            await _ledger.AdjustCustomerBalanceAsync(customer.Id, -req.Amount);
 
             await _db.SaveChangesAsync();
             await _audit.LogAsync("PAYMENT", "Customer", customer.Id.ToString(),

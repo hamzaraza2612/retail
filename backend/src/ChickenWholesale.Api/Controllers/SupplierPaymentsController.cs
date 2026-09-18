@@ -16,13 +16,15 @@ public class SupplierPaymentsController : ControllerBase
     private readonly ApplicationDbContext _db;
     private readonly AuditService _audit;
     private readonly CodeGeneratorService _codeGen;
+    private readonly LedgerService _ledger;
     private readonly CurrentUserService _currentUser;
 
-    public SupplierPaymentsController(ApplicationDbContext db, AuditService audit, CodeGeneratorService codeGen, CurrentUserService currentUser)
+    public SupplierPaymentsController(ApplicationDbContext db, AuditService audit, CodeGeneratorService codeGen, LedgerService ledger, CurrentUserService currentUser)
     {
         _db = db;
         _audit = audit;
         _codeGen = codeGen;
+        _ledger = ledger;
         _currentUser = currentUser;
     }
 
@@ -78,14 +80,17 @@ public class SupplierPaymentsController : ControllerBase
             };
             _db.SupplierPayments.Add(payment);
 
-            supplier.CurrentBalance -= req.Amount;
-            supplier.UpdatedAt = DateTime.UtcNow;
-
             if (purchase != null)
             {
-                purchase.PaidAmount += req.Amount;
-                purchase.RemainingAmount -= req.Amount;
+                var result = await _ledger.ApplyPurchasePaymentAsync(purchase.Id, req.Amount);
+                if (!result.Success)
+                {
+                    await tx.RollbackAsync();
+                    return BadRequest(new { error = "Amount exceeds the purchase's current remaining balance (it may have just been paid by another transaction). Please refresh and try again." });
+                }
             }
+
+            await _ledger.AdjustSupplierBalanceAsync(supplier.Id, -req.Amount);
 
             await _db.SaveChangesAsync();
             await _audit.LogAsync("SUPPLIER_PAYMENT", "Supplier", supplier.Id.ToString(),

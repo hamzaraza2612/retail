@@ -17,15 +17,33 @@ public class SalesOrdersController : ControllerBase
     private readonly AuditService _audit;
     private readonly CodeGeneratorService _codeGen;
     private readonly InventoryService _inventory;
+    private readonly LedgerService _ledger;
     private readonly CurrentUserService _currentUser;
 
+    // Server-side transition table — the single source of truth for which status changes
+    // are legal. The frontend's button set mirrors this, but must not be relied on alone:
+    // this guard is what actually stops a direct API call from e.g. jumping Draft straight
+    // to Delivered (skipping stock deduction/invoicing) or moving a Confirmed order back
+    // to Draft (leaving stock deducted and an invoice orphaned from the order's status).
+    private static readonly Dictionary<SalesOrderStatus, SalesOrderStatus[]> AllowedTransitions = new()
+    {
+        [SalesOrderStatus.Draft] = new[] { SalesOrderStatus.Confirmed, SalesOrderStatus.Cancelled },
+        [SalesOrderStatus.Confirmed] = new[] { SalesOrderStatus.Processing, SalesOrderStatus.Cancelled },
+        [SalesOrderStatus.Processing] = new[] { SalesOrderStatus.Ready, SalesOrderStatus.Cancelled },
+        [SalesOrderStatus.Ready] = new[] { SalesOrderStatus.OutForDelivery, SalesOrderStatus.Cancelled },
+        [SalesOrderStatus.OutForDelivery] = new[] { SalesOrderStatus.Delivered },
+        [SalesOrderStatus.Delivered] = Array.Empty<SalesOrderStatus>(),
+        [SalesOrderStatus.Cancelled] = Array.Empty<SalesOrderStatus>(),
+    };
+
     public SalesOrdersController(ApplicationDbContext db, AuditService audit, CodeGeneratorService codeGen,
-        InventoryService inventory, CurrentUserService currentUser)
+        InventoryService inventory, LedgerService ledger, CurrentUserService currentUser)
     {
         _db = db;
         _audit = audit;
         _codeGen = codeGen;
         _inventory = inventory;
+        _ledger = ledger;
         _currentUser = currentUser;
     }
 
@@ -69,6 +87,7 @@ public class SalesOrdersController : ControllerBase
     {
         var customer = await _db.Customers.FindAsync(req.CustomerId);
         if (customer == null) return BadRequest(new { error = "Customer not found" });
+        if (!customer.IsActive) return BadRequest(new { error = $"Customer '{customer.BusinessName}' is deactivated and cannot receive new orders" });
 
         var order = new SalesOrder
         {
@@ -86,6 +105,7 @@ public class SalesOrdersController : ControllerBase
         {
             var product = await _db.Products.FindAsync(itemReq.ProductId);
             if (product == null) return BadRequest(new { error = $"Product {itemReq.ProductId} not found" });
+            if (!product.IsActive) return BadRequest(new { error = $"Product '{product.Name}' is deactivated and cannot be ordered" });
 
             var total = itemReq.Quantity * itemReq.Rate;
             subtotal += total;
@@ -130,14 +150,32 @@ public class SalesOrdersController : ControllerBase
             .FirstOrDefaultAsync(o => o.Id == id);
         if (order == null) return NotFound();
 
-        if (order.Status == SalesOrderStatus.Cancelled)
-            return BadRequest(new { error = "Cannot change status of a cancelled order" });
-        if (order.Status == SalesOrderStatus.Delivered && req.Status != SalesOrderStatus.Delivered)
-            return BadRequest(new { error = "Cannot change status of a delivered order" });
+        if (!AllowedTransitions.TryGetValue(order.Status, out var allowedNext) || !allowedNext.Contains(req.Status))
+            return BadRequest(new { error = $"Cannot change order from {order.Status} to {req.Status}" });
+
+        var observedStatus = order.Status;
 
         await using var tx = await _db.Database.BeginTransactionAsync();
         try
         {
+            // Atomically claim this exact transition: the WHERE clause only matches if the
+            // order is still in the status we just observed. If a concurrent request (a
+            // double-click, or a second worker) already moved it, this affects 0 rows and
+            // we reject instead of double-applying stock/invoice/balance side effects.
+            var claimed = await _db.SalesOrders
+                .Where(o => o.Id == id && o.Status == observedStatus)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(o => o.Status, req.Status)
+                    .SetProperty(o => o.UpdatedAt, DateTime.UtcNow));
+
+            if (claimed == 0)
+            {
+                await tx.RollbackAsync();
+                return Conflict(new { error = "This order was just updated by another request. Please refresh and try again." });
+            }
+
+            order.Status = req.Status;
+
             if (req.Status == SalesOrderStatus.Cancelled)
             {
                 if (order.StockDeducted)
@@ -147,50 +185,38 @@ public class SalesOrdersController : ControllerBase
                         await _inventory.ApplyMovementAsync(item.ProductId, item.Quantity, InventoryMovementType.RETURN_IN,
                             "SalesOrderCancel", order.Id, $"Order {order.OrderNumber} cancelled");
                     }
-                    order.Customer!.CurrentBalance -= order.RemainingAmount;
-                    order.Customer.UpdatedAt = DateTime.UtcNow;
+                    await _ledger.AdjustCustomerBalanceAsync(order.CustomerId, -order.RemainingAmount);
                     order.StockDeducted = false;
                 }
-                order.Status = SalesOrderStatus.Cancelled;
             }
-            else if (req.Status == SalesOrderStatus.Confirmed && order.Status == SalesOrderStatus.Draft)
+            else if (req.Status == SalesOrderStatus.Confirmed)
             {
-                if (!order.StockDeducted)
+                foreach (var item in order.Items)
                 {
-                    foreach (var item in order.Items)
-                    {
-                        await _inventory.ApplyMovementAsync(item.ProductId, -item.Quantity, InventoryMovementType.SALE,
-                            "SalesOrder", order.Id, $"Order {order.OrderNumber}", allowNegative: false);
-                    }
-
-                    var invoice = new Invoice
-                    {
-                        InvoiceNumber = await _codeGen.NextInvoiceNumberAsync(),
-                        SalesOrderId = order.Id,
-                        CustomerId = order.CustomerId,
-                        InvoiceDate = order.OrderDate,
-                        Subtotal = order.Subtotal,
-                        Discount = order.Discount,
-                        DeliveryCharges = order.DeliveryCharges,
-                        GrandTotal = order.GrandTotal,
-                        PaidAmount = order.PaidAmount,
-                        BalanceAmount = order.RemainingAmount,
-                        PaymentStatus = order.PaymentStatus
-                    };
-                    _db.Invoices.Add(invoice);
-
-                    order.Customer!.CurrentBalance += order.RemainingAmount;
-                    order.Customer.UpdatedAt = DateTime.UtcNow;
-                    order.StockDeducted = true;
+                    await _inventory.ApplyMovementAsync(item.ProductId, -item.Quantity, InventoryMovementType.SALE,
+                        "SalesOrder", order.Id, $"Order {order.OrderNumber}", allowNegative: false);
                 }
-                order.Status = SalesOrderStatus.Confirmed;
-            }
-            else
-            {
-                order.Status = req.Status;
+
+                var invoice = new Invoice
+                {
+                    InvoiceNumber = await _codeGen.NextInvoiceNumberAsync(),
+                    SalesOrderId = order.Id,
+                    CustomerId = order.CustomerId,
+                    InvoiceDate = order.OrderDate,
+                    Subtotal = order.Subtotal,
+                    Discount = order.Discount,
+                    DeliveryCharges = order.DeliveryCharges,
+                    GrandTotal = order.GrandTotal,
+                    PaidAmount = order.PaidAmount,
+                    BalanceAmount = order.RemainingAmount,
+                    PaymentStatus = order.PaymentStatus
+                };
+                _db.Invoices.Add(invoice);
+
+                await _ledger.AdjustCustomerBalanceAsync(order.CustomerId, order.RemainingAmount);
+                order.StockDeducted = true;
             }
 
-            order.UpdatedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync();
             await _audit.LogAsync("STATUS_CHANGE", "SalesOrder", order.Id.ToString(),
                 $"Order {order.OrderNumber} status -> {req.Status}");

@@ -15,7 +15,7 @@ public record CreateEmployeeRequest(
     [Required] string Role,
     string? Department,
     DateTime? JoiningDate,
-    [Range(0, double.MaxValue)] decimal Salary,
+    [Range(0, 100_000_000)] decimal Salary,
     string? Notes
 );
 
@@ -25,7 +25,7 @@ public record UpdateEmployeeRequest(
     string? CNIC,
     [Required] string Role,
     string? Department,
-    [Range(0, double.MaxValue)] decimal Salary,
+    [Range(0, 100_000_000)] decimal Salary,
     EmployeeStatus Status,
     string? Notes
 );

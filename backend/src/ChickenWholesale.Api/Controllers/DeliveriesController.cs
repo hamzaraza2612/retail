@@ -15,11 +15,27 @@ public class DeliveriesController : ControllerBase
 {
     private readonly ApplicationDbContext _db;
     private readonly AuditService _audit;
+    private readonly CurrentUserService _currentUser;
 
-    public DeliveriesController(ApplicationDbContext db, AuditService audit)
+    // Mirrors the same server-side transition guard used for sales orders — without it,
+    // UpdateStatus below would accept any status value for any current status (e.g. a
+    // driver "un-delivering" an order back to Pending). Failed allows one retry path back
+    // to Assigned (re-dispatch); Delivered and Cancelled are terminal.
+    private static readonly Dictionary<DeliveryStatus, DeliveryStatus[]> AllowedTransitions = new()
+    {
+        [DeliveryStatus.Pending] = new[] { DeliveryStatus.Assigned, DeliveryStatus.Cancelled },
+        [DeliveryStatus.Assigned] = new[] { DeliveryStatus.OutForDelivery, DeliveryStatus.Cancelled },
+        [DeliveryStatus.OutForDelivery] = new[] { DeliveryStatus.Delivered, DeliveryStatus.Failed },
+        [DeliveryStatus.Failed] = new[] { DeliveryStatus.Assigned, DeliveryStatus.Cancelled },
+        [DeliveryStatus.Delivered] = Array.Empty<DeliveryStatus>(),
+        [DeliveryStatus.Cancelled] = Array.Empty<DeliveryStatus>(),
+    };
+
+    public DeliveriesController(ApplicationDbContext db, AuditService audit, CurrentUserService currentUser)
     {
         _db = db;
         _audit = audit;
+        _currentUser = currentUser;
     }
 
     private static DeliveryDto ToDto(Delivery d) => new(
@@ -34,7 +50,19 @@ public class DeliveriesController : ControllerBase
     {
         var query = _db.Deliveries.Include(d => d.SalesOrder).Include(d => d.Customer).Include(d => d.DriverEmployee).AsQueryable();
         if (status.HasValue) query = query.Where(d => d.Status == status);
-        if (driverEmployeeId.HasValue) query = query.Where(d => d.DriverEmployeeId == driverEmployeeId);
+
+        if (_currentUser.Role == "Delivery")
+        {
+            // A Delivery-role login only ever sees deliveries assigned to the employee it's
+            // linked to — the driverEmployeeId query param is ignored for this role rather
+            // than trusted, since a client-supplied filter must never be able to widen access.
+            var myEmployeeId = _currentUser.EmployeeId;
+            query = query.Where(d => myEmployeeId != null && d.DriverEmployeeId == myEmployeeId);
+        }
+        else if (driverEmployeeId.HasValue)
+        {
+            query = query.Where(d => d.DriverEmployeeId == driverEmployeeId);
+        }
 
         var total = await query.CountAsync();
         var items = await query.OrderByDescending(d => d.CreatedAt).Skip((page - 1) * pageSize).Take(pageSize).ToListAsync();
@@ -102,6 +130,12 @@ public class DeliveriesController : ControllerBase
         var delivery = await _db.Deliveries.Include(d => d.SalesOrder).Include(d => d.Customer).Include(d => d.DriverEmployee)
             .FirstOrDefaultAsync(d => d.Id == id);
         if (delivery == null) return NotFound();
+
+        if (_currentUser.Role == "Delivery" && delivery.DriverEmployeeId != _currentUser.EmployeeId)
+            return Forbid();
+
+        if (!AllowedTransitions.TryGetValue(delivery.Status, out var allowedNext) || !allowedNext.Contains(req.Status))
+            return BadRequest(new { error = $"Cannot change delivery from {delivery.Status} to {req.Status}" });
 
         delivery.Status = req.Status;
         if (!string.IsNullOrWhiteSpace(req.Notes)) delivery.Notes = req.Notes;
