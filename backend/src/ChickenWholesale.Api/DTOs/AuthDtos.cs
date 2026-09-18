@@ -1,0 +1,50 @@
+using System.ComponentModel.DataAnnotations;
+using ChickenWholesale.Api.Models;
+
+namespace ChickenWholesale.Api.DTOs;
+
+public record LoginRequest(
+    [Required] string Username,
+    [Required] string Password
+);
+
+public record LoginResponse(
+    string Token,
+    int UserId,
+    string Username,
+    string FullName,
+    string Email,
+    UserRole Role
+);
+
+public record UserDto(
+    int Id,
+    string Username,
+    string Email,
+    string FullName,
+    UserRole Role,
+    string? Phone,
+    bool IsActive,
+    DateTime CreatedAt,
+    DateTime? LastLoginAt
+);
+
+public record CreateUserRequest(
+    [Required] string Username,
+    [Required, EmailAddress] string Email,
+    [Required, MinLength(6)] string Password,
+    [Required] string FullName,
+    [Required] UserRole Role,
+    string? Phone
+);
+
+public record UpdateUserRequest(
+    [Required] string FullName,
+    [Required] UserRole Role,
+    string? Phone,
+    bool IsActive
+);
+
+public record ChangePasswordRequest(
+    [Required, MinLength(6)] string NewPassword
+);
