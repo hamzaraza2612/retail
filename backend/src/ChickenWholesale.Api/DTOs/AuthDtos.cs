@@ -32,7 +32,7 @@ public record UserDto(
 public record CreateUserRequest(
     [Required] string Username,
     [Required, EmailAddress] string Email,
-    [Required, MinLength(6)] string Password,
+    [Required, MinLength(8)] string Password,
     [Required] string FullName,
     [Required] UserRole Role,
     string? Phone
@@ -46,5 +46,5 @@ public record UpdateUserRequest(
 );
 
 public record ChangePasswordRequest(
-    [Required, MinLength(6)] string NewPassword
+    [Required, MinLength(8)] string NewPassword
 );

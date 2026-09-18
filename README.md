@@ -82,7 +82,7 @@ See `.env.example` for the full list. Key ones:
 |---|---|
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | Database credentials |
 | `CONNECTION_STRING` | Full Npgsql connection string used by the API container |
-| `JWT_KEY` | Secret used to sign JWTs — **change this in any non-local deployment** |
+| `JWT_KEY` | Secret used to sign JWTs — **change this in any non-local deployment**. The API refuses to start with `ASPNETCORE_ENVIRONMENT=Production` (the Docker default) if this is missing, under 32 characters, or still the placeholder from `.env.example` — generate one with `openssl rand -base64 48` |
 | `JWT_EXPIRY_HOURS` | Token lifetime |
 | `CORS_ALLOWED_ORIGINS` | Origins allowed to call the API directly (only relevant if you bypass the nginx proxy) |
 | `API_PORT` / `FRONTEND_PORT` | Host ports the containers are published on |
@@ -124,15 +124,32 @@ Migrations apply automatically on API startup (both locally and in Docker) — n
 
 ## Running Tests
 
+Tests run against a real, disposable PostgreSQL database (not the EF Core InMemory
+provider) — a Postgres server needs to be reachable at `localhost:5432` with a `postgres`
+superuser whose password matches `change-me-strong-password` (the compose default), or edit
+the maintenance connection string in `tests/ChickenWholesale.Tests/TestHelpers.cs`. The
+easiest way to get one is the project's own `docker compose up -d postgres`. Each test
+creates and uses its own throwaway database (`test_<guid>`), so tests are fully isolated
+and safe to run in any order; they are not cleaned up automatically afterward.
+
 ```bash
+docker compose up -d postgres   # if it isn't already running
 cd backend
 dotnet test
 ```
 
 Covers the business-critical paths: customer/product creation, purchase increasing stock,
-sales order confirmation decreasing stock **exactly once** (idempotency), negative-stock
-prevention, order total calculation, customer payments reducing receivables, and supplier
-payments reducing payables — all against an isolated in-memory database per test.
+sales order confirmation decreasing stock **exactly once** (idempotency), rejecting an
+invalid or repeated status transition, negative-stock prevention, order total calculation,
+customer payments reducing receivables (and rejecting an overpayment against a specific
+invoice), supplier payments reducing payables, deactivated customers/products being
+rejected from new orders, and — run against real concurrent requests, not simulated — two
+workers racing to confirm the same order, where exactly one may succeed.
+
+This deliberately uses a real database instead of InMemory: the concurrency-safety fixes
+compile to real atomic SQL (`ExecuteUpdateAsync`) that the InMemory provider can't
+translate, and InMemory has no row-locking semantics to meaningfully test a race against
+regardless.
 
 ## API Overview
 
@@ -228,6 +245,25 @@ off-host.
   call explicitly opts into `allowNegative` (used only for purchases, which can only ever
   increase stock).
 - All money columns are `decimal`, never floating point.
+- **Concurrency-safe balance and stock updates.** Stock deduction (`InventoryService`) and
+  every customer/supplier balance change (`LedgerService`) compile to a single atomic SQL
+  `UPDATE ... SET col = col + @delta [WHERE cap-check]` via EF Core's `ExecuteUpdateAsync`,
+  rather than reading a value into memory and writing it back. This closes the classic
+  "Worker A and Worker B both read stock=100, both sell 80" lost-update race: Postgres
+  row-locks on `UPDATE` and re-evaluates the `WHERE` clause against the latest committed
+  row, so a second concurrent oversell/overpayment attempt affects 0 rows and is rejected
+  instead of corrupting the total. `SalesOrdersController.UpdateStatus` uses the same
+  pattern (an atomic conditional status transition) to make order confirmation/cancellation
+  safe against a double-click or two workers acting on the same order at once — the loser
+  gets `409 Conflict`, never a duplicate invoice or double stock deduction. This is
+  exercised directly by `ConfirmSalesOrder_ConcurrentDoubleConfirm_OnlyOneSucceeds` in the
+  test suite, which fires two real concurrent requests against Postgres.
+- **Order status transitions are validated server-side**, not just hidden in the UI — a
+  fixed table in `SalesOrdersController` is the only source of truth for which status
+  changes are legal (e.g. `Draft → Delivered` directly, skipping stock deduction and
+  invoicing, is rejected regardless of how the request is made).
+- Orders and purchases cannot be created against a deactivated customer, supplier, or
+  product.
 
 ## Known Limitations (by design, for a 2-day MVP)
 
@@ -235,5 +271,16 @@ off-host.
   reconciled accounting figure, and is labelled as such in the UI.
 - No WhatsApp/SMS integration, no payroll module, no route optimization — these are
   explicitly out of scope for the MVP (see the task brief's P2 list).
+- Human-readable sequential codes (`CUST-2026-00010`, `PO-2026-00004`, ...) are generated
+  from a row count and are not retry-safe against two records being created in the exact
+  same instant — a rare collision would surface as a one-off 500 rather than a friendly
+  error. Low real-world likelihood for a single-location business; the robust fix is a
+  Postgres sequence per entity type.
+- The `Delivery` role can update the status of any delivery, not only ones assigned to it —
+  there's no link between a login (`User`) and a driver (`Employee`) record to scope this.
+  Adding that link is a schema change, intentionally left out of this pass.
+- No token revocation/blacklist — logging out clears the token client-side only; a stolen
+  JWT remains valid until it expires (`JWT_EXPIRY_HOURS`, default 12h).
+- The sidebar layout is desktop-first without a mobile collapse/hamburger menu.
 
 See also [`BUSINESS_WORKFLOW.md`](./BUSINESS_WORKFLOW.md) for how the modules connect end to end.

@@ -122,7 +122,7 @@ export default function UsersList() {
             <>
               <Input label="Username" required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
               <Input label="Email" type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              <Input label="Password" type="password" required minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <Input label="Password" type="password" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
             </>
           )}
           <Input label="Full Name" required value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
@@ -144,7 +144,7 @@ export default function UsersList() {
 
       <Modal open={!!resetTarget} onClose={() => setResetTarget(null)} title={`Reset Password: ${resetTarget?.username}`}>
         <form onSubmit={handleResetPassword}>
-          <Input label="New Password" type="password" required minLength={6} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          <Input label="New Password" type="password" required minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           <div className="flex justify-end gap-2 mt-2">
             <Button type="button" variant="secondary" onClick={() => setResetTarget(null)}>Cancel</Button>
             <Button type="submit">Update Password</Button>

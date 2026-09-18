@@ -4,16 +4,56 @@ using ChickenWholesale.Api.Models;
 using ChickenWholesale.Api.Services;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace ChickenWholesale.Tests;
 
+/// <summary>
+/// Business logic tests run against a real, disposable PostgreSQL database rather than the
+/// EF Core InMemory provider. This is a deliberate choice for this codebase: the audit's
+/// concurrency fixes rely on ExecuteUpdateAsync compiling to real atomic SQL ("UPDATE ...
+/// SET col = col + @delta WHERE ..."), which the InMemory provider cannot translate at all,
+/// and even if it could, InMemory has no row-locking/isolation semantics — it could never
+/// actually exercise the race conditions these tests are written to catch. Each test gets
+/// its own throwaway Postgres database (created and dropped via the maintenance connection),
+/// so tests stay fully isolated and can run in any order.
+/// </summary>
 public static class TestHelpers
 {
+    private const string MaintenanceConnectionString =
+        "Host=localhost;Port=5432;Database=postgres;Username=postgres;Password=change-me-strong-password";
+
+    private static string BuildConnectionString(string dbName) =>
+        $"Host=localhost;Port=5432;Database={dbName};Username=postgres;Password=change-me-strong-password";
+
+    /// <summary>Creates a fresh, isolated test database and returns a context connected to it.</summary>
     public static ApplicationDbContext CreateDb()
     {
+        var dbName = "test_" + Guid.NewGuid().ToString("N");
+
+        using (var conn = new NpgsqlConnection(MaintenanceConnectionString))
+        {
+            conn.Open();
+            using var cmd = new NpgsqlCommand($"CREATE DATABASE \"{dbName}\"", conn);
+            cmd.ExecuteNonQuery();
+        }
+
         var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
+            .UseNpgsql(BuildConnectionString(dbName))
+            .Options;
+        var db = new ApplicationDbContext(options);
+        db.Database.EnsureCreated();
+        return db;
+    }
+
+    /// <summary>
+    /// Returns a second, independent DbContext pointed at the same database as an existing
+    /// one — simulating a second worker's own request-scoped context for concurrency tests.
+    /// </summary>
+    public static ApplicationDbContext CreateSecondContext(ApplicationDbContext existing)
+    {
+        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseNpgsql(existing.Database.GetConnectionString())
             .Options;
         return new ApplicationDbContext(options);
     }
@@ -87,4 +127,23 @@ public static class TestHelpers
         await db.SaveChangesAsync();
         return supplier;
     }
+
+    // Even against a real database, a DbContext caches entities it has already loaded in
+    // its identity map, so re-reading through the SAME context used to perform an
+    // ExecuteUpdateAsync (which bypasses the tracker) can return a stale instance. These
+    // helpers always hit the store fresh, the way a new per-request DbContext would.
+    public static Task<decimal> FreshStock(ApplicationDbContext db, int productId) =>
+        db.Products.AsNoTracking().Where(p => p.Id == productId).Select(p => p.CurrentStock).FirstAsync();
+
+    public static Task<Customer> FreshCustomer(ApplicationDbContext db, int customerId) =>
+        db.Customers.AsNoTracking().FirstAsync(c => c.Id == customerId);
+
+    public static Task<Supplier> FreshSupplier(ApplicationDbContext db, int supplierId) =>
+        db.Suppliers.AsNoTracking().FirstAsync(s => s.Id == supplierId);
+
+    public static Task<Invoice> FreshInvoice(ApplicationDbContext db, int invoiceId) =>
+        db.Invoices.AsNoTracking().FirstAsync(i => i.Id == invoiceId);
+
+    public static Task<Purchase> FreshPurchase(ApplicationDbContext db, int purchaseId) =>
+        db.Purchases.AsNoTracking().FirstAsync(p => p.Id == purchaseId);
 }
