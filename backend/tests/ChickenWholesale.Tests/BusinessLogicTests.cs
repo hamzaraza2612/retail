@@ -28,6 +28,33 @@ public class BusinessLogicTests
         Assert.Single(db.Customers);
     }
 
+    // ---------- Code generation is collision-free under real concurrency ----------
+    [Fact]
+    public async Task CodeGenerator_ConcurrentCustomerCreation_NeverGeneratesDuplicateCodes()
+    {
+        // Regression test for the audit finding that COUNT(*)+1 code generation could
+        // hand two concurrent requests the same customer code, crashing the loser on the
+        // unique index. CodeGeneratorService is now backed by a Postgres SEQUENCE
+        // (nextval() is atomic by construction), so firing several real concurrent
+        // requests must succeed with distinct codes and no exception.
+        var dbA = TestHelpers.CreateDb();
+        var currentUser = TestHelpers.CreateCurrentUser();
+
+        var contexts = new[] { dbA, TestHelpers.CreateSecondContext(dbA), TestHelpers.CreateSecondContext(dbA), TestHelpers.CreateSecondContext(dbA) };
+        var controllers = contexts.Select(db => new CustomersController(db, new AuditService(db, currentUser), new CodeGeneratorService(db))).ToArray();
+
+        var tasks = controllers.Select((c, i) => c.Create(new CreateCustomerRequest(
+            $"Concurrent Customer {i}", null, $"0300-000000{i}", null, null, null,
+            CustomerType.Individual, 0, null, 0, null))).ToArray();
+        await Task.WhenAll(tasks);
+
+        var codes = tasks.Select(t => Assert.IsType<CustomerDto>(Assert.IsType<OkObjectResult>(t.Result.Result).Value).CustomerCode).ToList();
+        Assert.Equal(codes.Count, codes.Distinct().Count());
+
+        var totalInDb = await dbA.Customers.AsNoTracking().CountAsync();
+        Assert.Equal(4, totalInDb);
+    }
+
     // ---------- Product creation ----------
     [Fact]
     public async Task CreateProduct_StartsWithZeroStock()

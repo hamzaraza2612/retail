@@ -30,6 +30,16 @@ public class ApplicationDbContext : DbContext
     {
         base.OnModelCreating(b);
 
+        // ---- Sequences backing human-readable business identifiers (see CodeGeneratorService) ----
+        b.HasSequence<long>("customer_code_seq").StartsAt(1).IncrementsBy(1);
+        b.HasSequence<long>("supplier_code_seq").StartsAt(1).IncrementsBy(1);
+        b.HasSequence<long>("purchase_number_seq").StartsAt(1).IncrementsBy(1);
+        b.HasSequence<long>("order_number_seq").StartsAt(1).IncrementsBy(1);
+        b.HasSequence<long>("invoice_number_seq").StartsAt(1).IncrementsBy(1);
+        b.HasSequence<long>("payment_number_seq").StartsAt(1).IncrementsBy(1);
+        b.HasSequence<long>("supplier_payment_number_seq").StartsAt(1).IncrementsBy(1);
+        b.HasSequence<long>("employee_code_seq").StartsAt(1).IncrementsBy(1);
+
         // ---- Decimal precision (money = 18,2; quantities = 18,3) ----
         foreach (var entityType in b.Model.GetEntityTypes())
         {
@@ -77,6 +87,7 @@ public class ApplicationDbContext : DbContext
         b.Entity<Payment>().HasIndex(x => x.PaymentNumber).IsUnique();
         b.Entity<SupplierPayment>().HasIndex(x => x.PaymentNumber).IsUnique();
         b.Entity<Employee>().HasIndex(x => x.EmployeeCode).IsUnique();
+        b.Entity<User>().HasIndex(x => x.EmployeeId).IsUnique();
 
         // ---- Useful search indexes ----
         b.Entity<Customer>().HasIndex(x => x.BusinessName);
@@ -152,5 +163,9 @@ public class ApplicationDbContext : DbContext
         b.Entity<Expense>()
             .HasOne(x => x.Category).WithMany(x => x.Expenses)
             .HasForeignKey(x => x.CategoryId).OnDelete(DeleteBehavior.Restrict);
+
+        b.Entity<User>()
+            .HasOne(x => x.Employee).WithOne()
+            .HasForeignKey<User>(x => x.EmployeeId).OnDelete(DeleteBehavior.SetNull);
     }
 }

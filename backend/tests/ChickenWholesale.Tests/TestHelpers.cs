@@ -58,17 +58,37 @@ public static class TestHelpers
         return new ApplicationDbContext(options);
     }
 
-    public static CurrentUserService CreateCurrentUser(int userId = 1, string userName = "testuser")
+    public static CurrentUserService CreateCurrentUser(int userId = 1, string userName = "testuser", string role = "Admin", int? employeeId = null)
     {
-        var claims = new ClaimsIdentity(new[]
+        var claimsList = new List<Claim>
         {
-            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
-            new Claim(ClaimTypes.Name, userName),
-            new Claim(ClaimTypes.Role, "Admin")
-        }, "Test");
+            new(ClaimTypes.NameIdentifier, userId.ToString()),
+            new(ClaimTypes.Name, userName),
+            new(ClaimTypes.Role, role)
+        };
+        if (employeeId.HasValue) claimsList.Add(new Claim("employeeId", employeeId.Value.ToString()));
+
+        var claims = new ClaimsIdentity(claimsList, "Test");
         var httpContext = new DefaultHttpContext { User = new ClaimsPrincipal(claims) };
         var accessor = new HttpContextAccessor { HttpContext = httpContext };
         return new CurrentUserService(accessor);
+    }
+
+    public static async Task<Employee> SeedEmployeeAsync(ApplicationDbContext db, string code, string name)
+    {
+        var employee = new Employee
+        {
+            EmployeeCode = code,
+            Name = name,
+            Phone = "0300-0000000",
+            Role = "Driver",
+            JoiningDate = DateTime.UtcNow,
+            Salary = 30000,
+            Status = EmployeeStatus.Active
+        };
+        db.Employees.Add(employee);
+        await db.SaveChangesAsync();
+        return employee;
     }
 
     public static async Task<Product> SeedProductAsync(ApplicationDbContext db, decimal stock = 100, decimal minStock = 10)

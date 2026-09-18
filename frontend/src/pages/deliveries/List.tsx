@@ -8,10 +8,13 @@ import Badge from "../../components/ui/Badge";
 import { Select } from "../../components/ui/Input";
 import { formatDate } from "../../lib/format";
 import { errorMessage } from "../../api/client";
+import { useAuth } from "../../auth/AuthContext";
 
 const STATUSES: DeliveryStatus[] = ["Pending", "Assigned", "OutForDelivery", "Delivered", "Failed", "Cancelled"];
 
 export default function DeliveriesList() {
+  const { hasRole } = useAuth();
+  const canReassignDriver = hasRole("Admin", "Manager", "Sales", "StoreKeeper");
   const [data, setData] = useState<{ items: Delivery[]; totalCount: number }>({ items: [], totalCount: 0 });
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +53,9 @@ export default function DeliveriesList() {
     <div>
       <div className="mb-4">
         <h1 className="text-xl font-bold text-gray-900">Deliveries</h1>
-        <p className="text-sm text-gray-500">Track order deliveries and assign drivers</p>
+        <p className="text-sm text-gray-500">
+          {canReassignDriver ? "Track order deliveries and assign drivers" : "Your assigned deliveries"}
+        </p>
       </div>
 
       <div className="mb-3">
@@ -69,12 +74,12 @@ export default function DeliveriesList() {
           { header: "Customer", render: (d) => d.customerName },
           { header: "Delivery Date", render: (d) => d.deliveryDate ? formatDate(d.deliveryDate) : "-" },
           {
-            header: "Driver", render: (d) => (
+            header: "Driver", render: (d) => canReassignDriver ? (
               <Select value={d.driverEmployeeId ?? ""} onChange={(e) => assignDriver(d, Number(e.target.value))} className="text-xs py-1">
                 <option value="">Unassigned</option>
                 {employees.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}
               </Select>
-            )
+            ) : (d.driverName ?? "Unassigned")
           },
           { header: "Vehicle", render: (d) => d.vehicle ?? "-" },
           { header: "Status", render: (d) => <Badge value={d.status} /> },

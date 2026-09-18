@@ -48,14 +48,22 @@ cp .env.example .env      # edit passwords/secrets for anything beyond local tes
 docker compose up -d --build
 ```
 
-This starts three containers:
+This starts three containers, each with a Docker healthcheck (`docker compose ps` shows
+`healthy` once ready — `frontend` waits on `api`, `api` waits on `postgres`):
 - `chicken_postgres` — PostgreSQL 16, persisted in the `postgres_data` volume
 - `chicken_api` — the Web API on port `8080` (runs EF Core migrations and seeds demo data automatically on first startup)
 - `chicken_frontend` — the built React app served by nginx on port `8081`, which reverse-proxies `/api/*` to the API container
 
+All three restart automatically (`restart: unless-stopped`) if they crash or the host reboots.
+
 Open **http://localhost:8081** and sign in with one of the demo accounts below.
 
 To stop: `docker compose down` (add `-v` to also drop the database volume).
+
+`POSTGRES_PORT` (default `5432`) is published to the host mainly so you can run the backup
+commands below or connect a GUI client directly; on a hardened production host with no
+need for that, remove the `ports:` mapping under `postgres:` in `docker-compose.yml` so the
+database is only reachable from the `api` container over the internal Docker network.
 
 ## Demo Login Credentials
 
@@ -228,6 +236,18 @@ docker exec chicken_postgres pg_dump -U postgres chickenwholesale > backup_$(dat
 cat backup_20260101.sql | docker exec -i chicken_postgres psql -U postgres -d chickenwholesale
 ```
 
+Restoring into the live database name requires it to be empty first (drop and recreate it,
+or restore into a fresh database as shown below) — `psql` will otherwise emit duplicate-key
+errors partway through and leave the target in a mixed state.
+
+**These exact commands were run against this project's own seeded data** as part of
+production-readiness verification: `pg_dump` produced a ~50KB SQL file, it was restored into
+a separate `restore_test_db` database on the same Postgres instance, and every table's row
+count (`Users`, `Customers`, `Suppliers`, `Products`, `Purchases`, `SalesOrders`, `Invoices`,
+`Payments`, `Employees`, `Expenses`, `AuditLogs`) plus a spot-check of actual row content
+(customer balances, a user's bcrypt password hash) matched the source database exactly
+before the test database was dropped. No manual data-fixing was required.
+
 For anything beyond ad-hoc local backups, schedule `pg_dump` via cron and store the output
 off-host.
 
@@ -272,15 +292,27 @@ off-host.
 - No WhatsApp/SMS integration, no payroll module, no route optimization — these are
   explicitly out of scope for the MVP (see the task brief's P2 list).
 - Human-readable sequential codes (`CUST-2026-00010`, `PO-2026-00004`, ...) are generated
-  from a row count and are not retry-safe against two records being created in the exact
-  same instant — a rare collision would surface as a one-off 500 rather than a friendly
-  error. Low real-world likelihood for a single-location business; the robust fix is a
-  Postgres sequence per entity type.
-- The `Delivery` role can update the status of any delivery, not only ones assigned to it —
-  there's no link between a login (`User`) and a driver (`Employee`) record to scope this.
-  Adding that link is a schema change, intentionally left out of this pass.
+  from a dedicated Postgres `SEQUENCE` per entity type (`nextval()`), which is atomic at
+  the database level — concurrent requests creating the same kind of record cannot collide
+  on the same code, with no locking or retry logic needed. Verified with an automated test
+  that fires many concurrent creations and asserts every generated code is unique.
+- The `Delivery` role only sees and can update deliveries assigned to it: each `User` with
+  the `Delivery` role is linked to an `Employee` record (`Users.EmployeeId`), and the
+  delivery list/detail/status-update endpoints filter or reject by that link server-side
+  (not just hidden in the UI) — a delivery worker cannot view or modify another worker's
+  delivery by guessing its ID.
 - No token revocation/blacklist — logging out clears the token client-side only; a stolen
-  JWT remains valid until it expires (`JWT_EXPIRY_HOURS`, default 12h).
+  JWT remains valid until it expires (`JWT_EXPIRY_HOURS`, default 12h). Changing a user's
+  password (self-service or an admin's "Reset Password") stamps `PasswordChangedAt`, which
+  is embedded in every token issued afterward and re-checked by middleware on every
+  authenticated request — so **any token issued before that password change stops working
+  immediately**, even though it hasn't technically expired yet. This narrows the "stolen
+  token" window to "until the token expires or the owner/an admin changes the password,"
+  without a distributed session/blacklist store. Deactivating a user (`IsActive = false`)
+  is enforced the same way and also takes effect on the next request, not at next login.
+  12 hours was chosen as a practical balance for shift-based staff (cashiers, sales, store
+  workers) who shouldn't have to re-login mid-shift, while still bounding a leaked token's
+  useful life to about a business day; override with `JWT_EXPIRY_HOURS` per deployment.
 - The sidebar layout is desktop-first without a mobile collapse/hamburger menu.
 
 See also [`BUSINESS_WORKFLOW.md`](./BUSINESS_WORKFLOW.md) for how the modules connect end to end.

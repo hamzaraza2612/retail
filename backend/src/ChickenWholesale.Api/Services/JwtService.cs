@@ -28,8 +28,12 @@ public class JwtService
             new(ClaimTypes.Name, user.Username),
             new(ClaimTypes.Email, user.Email),
             new(ClaimTypes.Role, user.Role.ToString()),
-            new("fullName", user.FullName)
+            new("fullName", user.FullName),
+            new("pwdTs", user.PasswordChangedAt.Ticks.ToString())
         };
+
+        if (user.EmployeeId.HasValue)
+            claims.Add(new Claim("employeeId", user.EmployeeId.Value.ToString()));
 
         var expiryHours = double.Parse(jwtSection["ExpiryHours"] ?? "12");
         var token = new JwtSecurityToken(

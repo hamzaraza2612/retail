@@ -27,6 +27,8 @@ export interface User {
   isActive: boolean;
   createdAt: string;
   lastLoginAt?: string;
+  employeeId?: number;
+  employeeName?: string;
 }
 
 export interface Customer {

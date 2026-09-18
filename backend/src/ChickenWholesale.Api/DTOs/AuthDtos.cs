@@ -26,7 +26,9 @@ public record UserDto(
     string? Phone,
     bool IsActive,
     DateTime CreatedAt,
-    DateTime? LastLoginAt
+    DateTime? LastLoginAt,
+    int? EmployeeId,
+    string? EmployeeName
 );
 
 public record CreateUserRequest(
@@ -35,14 +37,16 @@ public record CreateUserRequest(
     [Required, MinLength(8)] string Password,
     [Required] string FullName,
     [Required] UserRole Role,
-    string? Phone
+    string? Phone,
+    int? EmployeeId
 );
 
 public record UpdateUserRequest(
     [Required] string FullName,
     [Required] UserRole Role,
     string? Phone,
-    bool IsActive
+    bool IsActive,
+    int? EmployeeId
 );
 
 public record ChangePasswordRequest(

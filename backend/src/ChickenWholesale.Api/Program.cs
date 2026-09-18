@@ -126,6 +126,7 @@ if (!app.Environment.IsProduction())
 app.UseCors("Frontend");
 
 app.UseAuthentication();
+app.UseMiddleware<PasswordStampMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

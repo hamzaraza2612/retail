@@ -46,8 +46,9 @@ public class AuthController : ControllerBase
     public async Task<ActionResult<UserDto>> Me()
     {
         var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)!.Value;
-        var user = await _db.Users.FindAsync(int.Parse(idClaim));
+        var user = await _db.Users.Include(u => u.Employee).FirstOrDefaultAsync(u => u.Id == int.Parse(idClaim));
         if (user == null) return NotFound();
-        return Ok(new UserDto(user.Id, user.Username, user.Email, user.FullName, user.Role, user.Phone, user.IsActive, user.CreatedAt, user.LastLoginAt));
+        return Ok(new UserDto(user.Id, user.Username, user.Email, user.FullName, user.Role, user.Phone, user.IsActive,
+            user.CreatedAt, user.LastLoginAt, user.EmployeeId, user.Employee?.Name));
     }
 }

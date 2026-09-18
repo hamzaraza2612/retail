@@ -23,4 +23,14 @@ public class CurrentUserService
     public string UserName => _accessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Name) ?? "system";
 
     public string Role => _accessor.HttpContext?.User?.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+
+    /// <summary>The Employee record linked to this login, if any (used to scope the Delivery role to its own deliveries).</summary>
+    public int? EmployeeId
+    {
+        get
+        {
+            var claim = _accessor.HttpContext?.User?.FindFirstValue("employeeId");
+            return int.TryParse(claim, out var id) ? id : null;
+        }
+    }
 }
