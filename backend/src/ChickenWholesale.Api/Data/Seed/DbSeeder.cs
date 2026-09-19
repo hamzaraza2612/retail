@@ -38,32 +38,42 @@ public static class DbSeeder
             new ProductCategory { Name = "Cuts" },
             new ProductCategory { Name = "Live Chicken" },
             new ProductCategory { Name = "Other" },
+            new ProductCategory { Name = "Raw Material" },
         };
         db.ProductCategories.AddRange(categories);
         await db.SaveChangesAsync();
         ProductCategory Cat(string name) => categories.First(c => c.Name == name);
 
         // ---------------- Products ----------------
+        // All products below predate the RawMaterial/FinishedProduct classification and
+        // were already being purchased and sold directly — they're explicitly
+        // FinishedProduct here (also the column's DB default, see migration
+        // AddProcessingAndProductType) so nothing about their existing behavior changes.
         var products = new List<Product>
         {
-            new() { SKU = "WC-001", Name = "Whole Chicken", Category = Cat("Whole Chicken"), Unit = UnitOfMeasure.KG, PurchasePrice = 480, SalePrice = 550, MinimumStock = 100, CurrentStock = 0, Description = "Fresh whole chicken" },
-            new() { SKU = "LC-001", Name = "Live Chicken", Category = Cat("Live Chicken"), Unit = UnitOfMeasure.KG, PurchasePrice = 420, SalePrice = 480, MinimumStock = 200, CurrentStock = 0, Description = "Live broiler chicken" },
-            new() { SKU = "CM-001", Name = "Chicken Meat", Category = Cat("Whole Chicken"), Unit = UnitOfMeasure.KG, PurchasePrice = 500, SalePrice = 580, MinimumStock = 80, CurrentStock = 0 },
-            new() { SKU = "BC-001", Name = "Boneless Chicken", Category = Cat("Boneless"), Unit = UnitOfMeasure.KG, PurchasePrice = 650, SalePrice = 750, MinimumStock = 60, CurrentStock = 0 },
-            new() { SKU = "BR-001", Name = "Chicken Breast", Category = Cat("Breast"), Unit = UnitOfMeasure.KG, PurchasePrice = 600, SalePrice = 700, MinimumStock = 50, CurrentStock = 0 },
-            new() { SKU = "LG-001", Name = "Chicken Leg", Category = Cat("Leg"), Unit = UnitOfMeasure.KG, PurchasePrice = 520, SalePrice = 600, MinimumStock = 50, CurrentStock = 0 },
-            new() { SKU = "WG-001", Name = "Chicken Wings", Category = Cat("Wings"), Unit = UnitOfMeasure.KG, PurchasePrice = 500, SalePrice = 580, MinimumStock = 40, CurrentStock = 0 },
-            new() { SKU = "TH-001", Name = "Chicken Thigh", Category = Cat("Thigh"), Unit = UnitOfMeasure.KG, PurchasePrice = 540, SalePrice = 620, MinimumStock = 40, CurrentStock = 0 },
-            new() { SKU = "QC-001", Name = "Chicken Qorma Cut", Category = Cat("Cuts"), Unit = UnitOfMeasure.KG, PurchasePrice = 490, SalePrice = 570, MinimumStock = 50, CurrentStock = 0 },
-            new() { SKU = "KC-001", Name = "Chicken Karahi Cut", Category = Cat("Cuts"), Unit = UnitOfMeasure.KG, PurchasePrice = 500, SalePrice = 580, MinimumStock = 50, CurrentStock = 0 },
-            new() { SKU = "TC-001", Name = "Chicken Tikka Cut", Category = Cat("Cuts"), Unit = UnitOfMeasure.KG, PurchasePrice = 510, SalePrice = 590, MinimumStock = 40, CurrentStock = 0 },
-            new() { SKU = "MN-001", Name = "Chicken Mince", Category = Cat("Mince"), Unit = UnitOfMeasure.KG, PurchasePrice = 560, SalePrice = 650, MinimumStock = 30, CurrentStock = 0 },
-            new() { SKU = "OT-001", Name = "Chicken Liver", Category = Cat("Other"), Unit = UnitOfMeasure.KG, PurchasePrice = 350, SalePrice = 420, MinimumStock = 20, CurrentStock = 0 },
-            new() { SKU = "OT-002", Name = "Chicken Skin", Category = Cat("Other"), Unit = UnitOfMeasure.KG, PurchasePrice = 150, SalePrice = 200, MinimumStock = 20, CurrentStock = 0 },
-            new() { SKU = "OT-003", Name = "Chicken Feet", Category = Cat("Other"), Unit = UnitOfMeasure.KG, PurchasePrice = 120, SalePrice = 170, MinimumStock = 20, CurrentStock = 0 },
+            new() { SKU = "WC-001", Name = "Whole Chicken", Category = Cat("Whole Chicken"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 480, SalePrice = 550, MinimumStock = 100, CurrentStock = 0, Description = "Fresh whole chicken" },
+            new() { SKU = "LC-001", Name = "Live Chicken", Category = Cat("Live Chicken"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 420, SalePrice = 480, MinimumStock = 200, CurrentStock = 0, Description = "Live broiler chicken" },
+            new() { SKU = "CM-001", Name = "Chicken Meat", Category = Cat("Whole Chicken"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 500, SalePrice = 580, MinimumStock = 80, CurrentStock = 0 },
+            new() { SKU = "BC-001", Name = "Boneless Chicken", Category = Cat("Boneless"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 650, SalePrice = 750, MinimumStock = 60, CurrentStock = 0 },
+            new() { SKU = "BR-001", Name = "Chicken Breast", Category = Cat("Breast"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 600, SalePrice = 700, MinimumStock = 50, CurrentStock = 0 },
+            new() { SKU = "LG-001", Name = "Chicken Leg", Category = Cat("Leg"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 520, SalePrice = 600, MinimumStock = 50, CurrentStock = 0 },
+            new() { SKU = "WG-001", Name = "Chicken Wings", Category = Cat("Wings"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 500, SalePrice = 580, MinimumStock = 40, CurrentStock = 0 },
+            new() { SKU = "TH-001", Name = "Chicken Thigh", Category = Cat("Thigh"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 540, SalePrice = 620, MinimumStock = 40, CurrentStock = 0 },
+            new() { SKU = "QC-001", Name = "Chicken Qorma Cut", Category = Cat("Cuts"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 490, SalePrice = 570, MinimumStock = 50, CurrentStock = 0 },
+            new() { SKU = "KC-001", Name = "Chicken Karahi Cut", Category = Cat("Cuts"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 500, SalePrice = 580, MinimumStock = 50, CurrentStock = 0 },
+            new() { SKU = "TC-001", Name = "Chicken Tikka Cut", Category = Cat("Cuts"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 510, SalePrice = 590, MinimumStock = 40, CurrentStock = 0 },
+            new() { SKU = "MN-001", Name = "Chicken Mince", Category = Cat("Mince"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 560, SalePrice = 650, MinimumStock = 30, CurrentStock = 0 },
+            new() { SKU = "OT-001", Name = "Chicken Liver", Category = Cat("Other"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 350, SalePrice = 420, MinimumStock = 20, CurrentStock = 0 },
+            new() { SKU = "OT-002", Name = "Chicken Skin", Category = Cat("Other"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 150, SalePrice = 200, MinimumStock = 20, CurrentStock = 0 },
+            new() { SKU = "OT-003", Name = "Chicken Feet", Category = Cat("Other"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 120, SalePrice = 170, MinimumStock = 20, CurrentStock = 0 },
+            new() { SKU = "NK-001", Name = "Chicken Neck", Category = Cat("Other"), Unit = UnitOfMeasure.KG, ProductType = ProductType.FinishedProduct, PurchasePrice = 200, SalePrice = 260, MinimumStock = 15, CurrentStock = 0 },
+            // The one RawMaterial product in the demo data: consumed by processing
+            // batches, never sold directly. See BUSINESS_WORKFLOW.md "Processing & Costing".
+            new() { SKU = "RM-001", Name = "Raw Chicken (Whole Bird)", Category = Cat("Raw Material"), Unit = UnitOfMeasure.KG, ProductType = ProductType.RawMaterial, PurchasePrice = 550, SalePrice = 550, MinimumStock = 200, CurrentStock = 0, Description = "Whole raw bird purchased for cutting/processing" },
         };
         db.Products.AddRange(products);
         await db.SaveChangesAsync();
+        Product Prod(string sku) => products.First(p => p.SKU == sku);
 
         // ---------------- Suppliers ----------------
         var suppliers = new List<Supplier>
@@ -120,6 +130,25 @@ public static class DbSeeder
             });
             idx++;
         }
+        // Standing walk-in/cash customer (section 12): retail counter sales that don't
+        // warrant a full customer profile are recorded as an ordinary, fully-paid sales
+        // order against this one customer, using 100% existing order/invoice/payment
+        // code — see BUSINESS_WORKFLOW.md "Cash retail vs credit sales". Its balance stays
+        // 0 by construction since these sales are always paid in full at confirmation.
+        var walkInCustomer = new Customer
+        {
+            CustomerCode = "CASH-001",
+            BusinessName = "Walk-in / Cash Customer",
+            Phone = "N/A",
+            CustomerType = CustomerType.Individual,
+            CreditLimit = 0,
+            PaymentTerms = "Cash on delivery",
+            OpeningBalance = 0,
+            CurrentBalance = 0,
+            IsActive = true,
+            Notes = "System customer for walk-in retail/cash sales — not a real business. Do not deactivate."
+        };
+        customers.Add(walkInCustomer);
         db.Customers.AddRange(customers);
         await db.SaveChangesAsync();
 
@@ -272,6 +301,131 @@ public static class DbSeeder
         }
         await db.SaveChangesAsync();
 
+        // ---------------- Processing / Cutting demo data ----------------
+        // A worked example matching BUSINESS_WORKFLOW.md exactly: buy 500KG of raw whole
+        // bird, then process all of it into six cuts plus waste, so the Processing screen,
+        // Yield report, and product costing have real data to show from first login.
+        var rawChicken = Prod("RM-001");
+        var supplierForRaw = suppliers[0];
+        {
+            var qty = 500m;
+            var rate = rawChicken.PurchasePrice; // 550/KG
+            var total = qty * rate;
+            rawChicken.CurrentStock += qty;
+            db.InventoryTransactions.Add(new InventoryTransaction
+            {
+                Product = rawChicken,
+                MovementType = InventoryMovementType.PURCHASE,
+                Quantity = qty,
+                Unit = rawChicken.Unit,
+                ReferenceType = "Purchase",
+                StockAfter = rawChicken.CurrentStock,
+                Date = DateTime.UtcNow.AddDays(-1),
+                UserId = adminId,
+                Notes = "Seed data",
+                UnitCost = rate
+            });
+            var paid = total * 0.6m;
+            db.Purchases.Add(new Purchase
+            {
+                PurchaseNumber = $"PO-2026-{purchaseNo:D5}",
+                Supplier = supplierForRaw,
+                PurchaseDate = DateTime.UtcNow.AddDays(-1),
+                InvoiceNumber = $"SUPINV-{1000 + purchaseNo}",
+                Subtotal = total,
+                TotalAmount = total,
+                PaidAmount = paid,
+                RemainingAmount = total - paid,
+                Status = PurchaseStatus.Confirmed,
+                CreatedByUserId = adminId,
+                Items = new List<PurchaseItem> { new() { Product = rawChicken, Quantity = qty, Unit = rawChicken.Unit, Rate = rate, Total = total } }
+            });
+            supplierForRaw.CurrentBalance += (total - paid);
+            purchaseNo++;
+        }
+        await db.SaveChangesAsync();
+
+        var processingBatchNo = 1;
+        {
+            const decimal inputQty = 500m;
+            var outputPlan = new (string Sku, decimal Qty)[]
+            {
+                ("BC-001", 150m), // Boneless
+                ("BR-001", 70m),  // Breast
+                ("TC-001", 80m),  // Tikka
+                ("LG-001", 90m),  // Leg
+                ("WG-001", 50m),  // Wings
+                ("NK-001", 20m),  // Neck
+                ("WC-001", 20m),  // Whole Chicken
+            };
+            const decimal wasteQty = 20m; // inputQty = sum(outputPlan.Qty) + wasteQty = 480 + 20 = 500
+
+            var batch = new ProcessingBatch
+            {
+                BatchNumber = $"PB-2026-{processingBatchNo:D5}",
+                ProcessingDate = DateTime.UtcNow,
+                Status = ProcessingBatchStatus.Completed,
+                WasteQuantity = wasteQty,
+                WasteUnit = UnitOfMeasure.KG,
+                WasteReason = "Trimming and processing loss",
+                Notes = "Seed data — demonstrates the full processing/costing workflow",
+                CreatedByUserId = adminId
+            };
+
+            var inputUnitCost = rawChicken.PurchasePrice;
+            var allocatableCost = inputQty * inputUnitCost;
+            batch.Inputs.Add(new ProcessingInput { Product = rawChicken, Quantity = inputQty, Unit = rawChicken.Unit, UnitCost = inputUnitCost, TotalCost = allocatableCost });
+
+            var totalOutputQty = outputPlan.Sum(o => o.Qty);
+            var baseUnitCost = Math.Round(allocatableCost / totalOutputQty, 4);
+
+            foreach (var (sku, qty) in outputPlan)
+            {
+                var product = Prod(sku);
+                var allocatedCost = Math.Round(qty * baseUnitCost, 2);
+                batch.Outputs.Add(new ProcessingOutput { Product = product, Quantity = qty, Unit = product.Unit, UnitCost = baseUnitCost, AllocatedCost = allocatedCost });
+                product.PurchasePrice = baseUnitCost;
+            }
+
+            db.ProcessingBatches.Add(batch);
+
+            rawChicken.CurrentStock -= inputQty;
+            db.InventoryTransactions.Add(new InventoryTransaction
+            {
+                Product = rawChicken,
+                MovementType = InventoryMovementType.PROCESSING_OUT,
+                Quantity = inputQty,
+                Unit = rawChicken.Unit,
+                ReferenceType = "ProcessingBatch",
+                StockAfter = rawChicken.CurrentStock,
+                Date = batch.ProcessingDate,
+                UserId = adminId,
+                Notes = $"Processing batch {batch.BatchNumber}",
+                UnitCost = inputUnitCost
+            });
+
+            foreach (var (sku, qty) in outputPlan)
+            {
+                var product = Prod(sku);
+                product.CurrentStock += qty;
+                db.InventoryTransactions.Add(new InventoryTransaction
+                {
+                    Product = product,
+                    MovementType = InventoryMovementType.PROCESSING_IN,
+                    Quantity = qty,
+                    Unit = product.Unit,
+                    ReferenceType = "ProcessingBatch",
+                    StockAfter = product.CurrentStock,
+                    Date = batch.ProcessingDate,
+                    UserId = adminId,
+                    Notes = $"Processing batch {batch.BatchNumber}",
+                    UnitCost = baseUnitCost
+                });
+            }
+            processingBatchNo++;
+        }
+        await db.SaveChangesAsync();
+
         // ---------------- Expense Categories & Sample Expenses ----------------
         var expenseCategories = new[]
         {
@@ -328,6 +482,7 @@ public static class DbSeeder
         await AdvanceSequenceAsync(db, "invoice_number_seq", invoiceNo - 1);
         await AdvanceSequenceAsync(db, "payment_number_seq", paymentNo - 1);
         await AdvanceSequenceAsync(db, "employee_code_seq", employees.Length);
+        await AdvanceSequenceAsync(db, "processing_batch_number_seq", processingBatchNo - 1);
     }
 
     private static Task AdvanceSequenceAsync(ApplicationDbContext db, string sequenceName, int seededCount)

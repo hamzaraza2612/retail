@@ -9,6 +9,8 @@ export type OrderPaymentStatus = "Unpaid" | "Partial" | "Paid";
 export type PaymentMethod = "Cash" | "BankTransfer" | "OnlineTransfer" | "Cheque" | "Other";
 export type DeliveryStatus = "Pending" | "Assigned" | "OutForDelivery" | "Delivered" | "Failed" | "Cancelled";
 export type EmployeeStatus = "Active" | "Inactive";
+export type ProductType = "RawMaterial" | "FinishedProduct";
+export type ProcessingBatchStatus = "Draft" | "Completed" | "Cancelled";
 
 export interface PagedResult<T> {
   items: T[];
@@ -95,6 +97,7 @@ export interface Product {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  productType: ProductType;
 }
 
 export interface PurchaseItem {
@@ -143,6 +146,48 @@ export interface InventoryDashboard {
   lowStockCount: number;
   totalStockValue: number;
   lowStockProducts: Product[];
+  rawStockValue: number;
+  finishedStockValue: number;
+  rawMaterialCount: number;
+  finishedProductCount: number;
+}
+
+export interface ProcessingInputLine {
+  id: number;
+  productId: number;
+  productName: string;
+  quantity: number;
+  unit: UnitOfMeasure;
+  unitCost: number;
+  totalCost: number;
+}
+
+export interface ProcessingOutputLine {
+  id: number;
+  productId: number;
+  productName: string;
+  quantity: number;
+  unit: UnitOfMeasure;
+  unitCost: number;
+  allocatedCost: number;
+}
+
+export interface ProcessingBatch {
+  id: number;
+  batchNumber: string;
+  processingDate: string;
+  status: ProcessingBatchStatus;
+  wasteQuantity: number;
+  wasteUnit: UnitOfMeasure;
+  wasteReason?: string;
+  notes?: string;
+  createdAt: string;
+  totalInputQuantity: number;
+  totalOutputQuantity: number;
+  totalAllocatedCost: number;
+  yieldPercent?: number;
+  inputs: ProcessingInputLine[];
+  outputs: ProcessingOutputLine[];
 }
 
 export interface SalesOrderItem {
@@ -282,6 +327,15 @@ export interface DashboardCards {
   totalPayables: number;
   stockValue: number;
   estimatedGrossProfitThisMonth: number;
+  todayCashSales: number;
+  todayCreditSales: number;
+  todayEstimatedGrossProfit: number;
+  todayOperatingProfitLoss: number;
+  todayProcessingBatches: number;
+  todayRawMaterialProcessed: number;
+  todayProducedQuantity: number;
+  rawStockValue: number;
+  finishedStockValue: number;
 }
 
 export interface DailyPoint {

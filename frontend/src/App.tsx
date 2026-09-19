@@ -11,6 +11,8 @@ import SuppliersList from "./pages/suppliers/List";
 import SupplierDetailPage from "./pages/suppliers/Detail";
 import ProductsList from "./pages/products/List";
 import PurchasesList from "./pages/purchases/List";
+import ProcessingBatchesList from "./pages/processing/List";
+import ProcessingBatchDetailPage from "./pages/processing/Detail";
 import InventoryDashboardPage from "./pages/inventory/Dashboard";
 import OrdersList from "./pages/orders/List";
 import OrderDetailPage from "./pages/orders/Detail";
@@ -41,6 +43,8 @@ export default function App() {
             <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
             <Route path="/products" element={<ProductsList />} />
             <Route path="/purchases" element={<PurchasesList />} />
+            <Route path="/processing" element={<ProcessingBatchesList />} />
+            <Route path="/processing/:id" element={<ProcessingBatchDetailPage />} />
             <Route path="/inventory" element={<InventoryDashboardPage />} />
             <Route path="/orders" element={<OrdersList />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />

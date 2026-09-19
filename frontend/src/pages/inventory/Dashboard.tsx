@@ -86,6 +86,36 @@ export default function InventoryDashboardPage() {
         <StatCard label="Stock Value" value={formatMoney(dashboard.totalStockValue)} sub="At purchase price" />
       </div>
 
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <h3 className="font-semibold text-gray-800 mb-3">Raw Material Stock</h3>
+          <p className="text-xs text-gray-500 mb-2">{dashboard.rawMaterialCount} product(s) &middot; {formatMoney(dashboard.rawStockValue)} value</p>
+          <div className="space-y-1.5">
+            {products.filter((p) => p.productType === "RawMaterial").length === 0 && (
+              <p className="text-sm text-gray-400">No raw material products yet.</p>
+            )}
+            {products.filter((p) => p.productType === "RawMaterial").map((p) => (
+              <div key={p.id} className="flex items-center justify-between text-sm border-b last:border-0 pb-1.5">
+                <span className="text-gray-800">{p.name}</span>
+                <span className={p.currentStock <= p.minimumStock ? "text-red-600 font-medium" : "font-medium"}>{p.currentStock} {p.unit}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card>
+          <h3 className="font-semibold text-gray-800 mb-3">Finished Product Stock</h3>
+          <p className="text-xs text-gray-500 mb-2">{dashboard.finishedProductCount} product(s) &middot; {formatMoney(dashboard.finishedStockValue)} value</p>
+          <div className="space-y-1.5 max-h-72 overflow-y-auto">
+            {products.filter((p) => p.productType === "FinishedProduct").map((p) => (
+              <div key={p.id} className="flex items-center justify-between text-sm border-b last:border-0 pb-1.5">
+                <span className="text-gray-800">{p.name}</span>
+                <span className={p.currentStock <= p.minimumStock ? "text-red-600 font-medium" : "font-medium"}>{p.currentStock} {p.unit}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
       <Card>
         <h3 className="font-semibold text-gray-800 mb-3">Low Stock Products</h3>
         <Table

@@ -40,6 +40,9 @@ public class DashboardController : ControllerBase
         var totalReceivables = await _db.Customers.Where(c => c.CurrentBalance > 0).SumAsync(c => (decimal?)c.CurrentBalance) ?? 0;
         var totalPayables = await _db.Suppliers.Where(s => s.CurrentBalance > 0).SumAsync(s => (decimal?)s.CurrentBalance) ?? 0;
         var stockValue = await _db.Products.Where(p => p.IsActive).SumAsync(p => (decimal?)(p.CurrentStock * p.PurchasePrice)) ?? 0;
+        var rawStockValue = await _db.Products.Where(p => p.IsActive && p.ProductType == ProductType.RawMaterial)
+            .SumAsync(p => (decimal?)(p.CurrentStock * p.PurchasePrice)) ?? 0;
+        var finishedStockValue = stockValue - rawStockValue;
 
         var monthRevenue = await _db.Invoices.Where(i => i.InvoiceDate >= monthStart).SumAsync(i => (decimal?)i.GrandTotal) ?? 0;
         var monthCogs = await _db.SalesOrderItems
@@ -47,6 +50,27 @@ public class DashboardController : ControllerBase
             .Join(_db.Products, i => i.ProductId, p => p.Id, (i, p) => i.Quantity * p.PurchasePrice)
             .SumAsync();
         var estimatedGrossProfit = monthRevenue - monthCogs;
+
+        // ---- Cash vs credit split, today's gross/operating profit, today's processing ----
+        var walkInCustomerId = await _db.Customers.Where(c => c.CustomerCode == "CASH-001").Select(c => (int?)c.Id).FirstOrDefaultAsync();
+        var todayOrdersForSplit = await _db.SalesOrders
+            .Where(o => o.OrderDate >= today && o.OrderDate < tomorrow && o.Status != SalesOrderStatus.Cancelled && o.Status != SalesOrderStatus.Draft)
+            .Select(o => new { o.CustomerId, o.GrandTotal }).ToListAsync();
+        var todayCashSales = todayOrdersForSplit.Where(o => walkInCustomerId.HasValue && o.CustomerId == walkInCustomerId).Sum(o => o.GrandTotal);
+        var todayCreditSales = todayOrdersForSplit.Where(o => !(walkInCustomerId.HasValue && o.CustomerId == walkInCustomerId)).Sum(o => o.GrandTotal);
+
+        var todayCogs = await _db.InventoryTransactions
+            .Where(t => t.MovementType == InventoryMovementType.SALE && t.Date >= today && t.Date < tomorrow)
+            .SumAsync(t => (decimal?)(t.Quantity * (t.UnitCost ?? 0))) ?? 0;
+        var todayGrossProfit = todaySales - todayCogs;
+        var todayOperatingProfitLoss = todayGrossProfit - todayExpenses;
+
+        var todayBatches = await _db.ProcessingBatches.Include(b => b.Inputs).Include(b => b.Outputs)
+            .Where(b => b.Status == ProcessingBatchStatus.Completed && b.ProcessingDate >= today && b.ProcessingDate < tomorrow)
+            .ToListAsync();
+        var todayProcessingBatches = todayBatches.Count;
+        var todayRawMaterialProcessed = todayBatches.Sum(b => b.Inputs.Sum(i => i.Quantity));
+        var todayProducedQuantity = todayBatches.Sum(b => b.Outputs.Sum(o => o.Quantity));
 
         var salesLast7Days = new List<DailyPointDto>();
         var ordersLast7Days = new List<DailyPointDto>();
@@ -100,7 +124,10 @@ public class DashboardController : ControllerBase
             .ToListAsync();
 
         var cards = new DashboardCardsDto(todaySales, todayOrders, todayPurchases, todayExpenses,
-            totalReceivables, totalPayables, stockValue, estimatedGrossProfit);
+            totalReceivables, totalPayables, stockValue, estimatedGrossProfit,
+            todayCashSales, todayCreditSales, todayGrossProfit, todayOperatingProfitLoss,
+            todayProcessingBatches, todayRawMaterialProcessed, todayProducedQuantity,
+            rawStockValue, finishedStockValue);
 
         return Ok(new DashboardDto(cards, salesLast7Days, ordersLast7Days, expensesByCategory, topProducts,
             recentOrders, pendingDeliveries, lowStock, recentPayments));

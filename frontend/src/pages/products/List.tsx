@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import toast from "react-hot-toast";
 import { productsApi } from "../../api/endpoints";
-import type { Product, ProductCategory, UnitOfMeasure } from "../../api/types";
+import type { Product, ProductCategory, ProductType, UnitOfMeasure } from "../../api/types";
 import Table from "../../components/ui/Table";
 import Pagination from "../../components/ui/Pagination";
 import Button from "../../components/ui/Button";
@@ -14,7 +14,10 @@ import { useAuth } from "../../auth/AuthContext";
 
 const UNITS: UnitOfMeasure[] = ["KG", "Piece", "Carton", "Crate", "Dozen", "Custom"];
 
-const emptyForm = { sku: "", name: "", categoryId: 0, unit: "KG" as UnitOfMeasure, purchasePrice: 0, salePrice: 0, minimumStock: 0, description: "" };
+const emptyForm = {
+  sku: "", name: "", categoryId: 0, unit: "KG" as UnitOfMeasure, purchasePrice: 0, salePrice: 0,
+  minimumStock: 0, description: "", productType: "FinishedProduct" as ProductType,
+};
 
 export default function ProductsList() {
   const { hasRole } = useAuth();
@@ -24,6 +27,7 @@ export default function ProductsList() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<ProductType | "">("");
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
@@ -35,11 +39,11 @@ export default function ProductsList() {
 
   function load() {
     setLoading(true);
-    productsApi.list({ search: search || undefined, lowStock: lowStockOnly || undefined, page, pageSize })
+    productsApi.list({ search: search || undefined, lowStock: lowStockOnly || undefined, productType: typeFilter || undefined, page, pageSize })
       .then((res) => setData(res.data)).finally(() => setLoading(false));
   }
 
-  useEffect(load, [page, search, lowStockOnly]);
+  useEffect(load, [page, search, lowStockOnly, typeFilter]);
   useEffect(() => { productsApi.categories().then((res) => setCategories(res.data)); }, []);
 
   function openCreate() {
@@ -50,7 +54,10 @@ export default function ProductsList() {
 
   function openEdit(p: Product) {
     setEditing(p);
-    setForm({ sku: p.sku, name: p.name, categoryId: p.categoryId, unit: p.unit, purchasePrice: p.purchasePrice, salePrice: p.salePrice, minimumStock: p.minimumStock, description: p.description ?? "" });
+    setForm({
+      sku: p.sku, name: p.name, categoryId: p.categoryId, unit: p.unit, purchasePrice: p.purchasePrice,
+      salePrice: p.salePrice, minimumStock: p.minimumStock, description: p.description ?? "", productType: p.productType,
+    });
     setModalOpen(true);
   }
 
@@ -107,6 +114,11 @@ export default function ProductsList() {
           <input type="checkbox" checked={lowStockOnly} onChange={(e) => { setLowStockOnly(e.target.checked); setPage(1); }} />
           Low stock only
         </label>
+        <select className="border border-gray-300 rounded-md px-3 py-2 text-sm" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value as ProductType | ""); setPage(1); }}>
+          <option value="">All Types</option>
+          <option value="RawMaterial">Raw Material</option>
+          <option value="FinishedProduct">Finished Product</option>
+        </select>
       </div>
 
       <Table
@@ -117,6 +129,7 @@ export default function ProductsList() {
           { header: "SKU", render: (p) => p.sku },
           { header: "Name", render: (p) => p.name },
           { header: "Category", render: (p) => p.categoryName },
+          { header: "Type", render: (p) => <span className={p.productType === "RawMaterial" ? "text-amber-700 text-xs font-medium" : "text-gray-500 text-xs"}>{p.productType === "RawMaterial" ? "Raw Material" : "Finished"}</span> },
           { header: "Unit", render: (p) => p.unit },
           { header: "Purchase Price", render: (p) => formatMoney(p.purchasePrice) },
           { header: "Sale Price", render: (p) => formatMoney(p.salePrice) },
@@ -144,6 +157,10 @@ export default function ProductsList() {
           </Select>
           <Select label="Unit" value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value as UnitOfMeasure })}>
             {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
+          </Select>
+          <Select label="Type" value={form.productType} onChange={(e) => setForm({ ...form, productType: e.target.value as ProductType })}>
+            <option value="FinishedProduct">Finished Product (sellable)</option>
+            <option value="RawMaterial">Raw Material (processing input)</option>
           </Select>
           <Input label="Purchase Price (Rs.)" type="number" step="0.01" required value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: Number(e.target.value) })} />
           <Input label="Sale Price (Rs.)" type="number" step="0.01" required value={form.salePrice} onChange={(e) => setForm({ ...form, salePrice: Number(e.target.value) })} />

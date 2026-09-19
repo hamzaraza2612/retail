@@ -183,6 +183,183 @@ public class ReportsController : ControllerBase
         return RespondCsv(rows, "payments.csv", format);
     }
 
+    [HttpGet("processing")]
+    public async Task<ActionResult> Processing([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? format)
+    {
+        var query = _db.ProcessingBatches.Include(b => b.Inputs).Include(b => b.Outputs).AsQueryable();
+        if (from.HasValue) query = query.Where(b => b.ProcessingDate >= from);
+        if (to.HasValue) query = query.Where(b => b.ProcessingDate <= to);
+
+        var batches = await query.OrderByDescending(b => b.ProcessingDate).ToListAsync();
+        var userNames = await _db.Users.ToDictionaryAsync(u => u.Id, u => u.FullName);
+
+        var rows = batches.Select(b => new ProcessingReportRow(
+            b.BatchNumber, b.ProcessingDate, b.Status.ToString(),
+            b.Inputs.Sum(i => i.Quantity), b.Outputs.Sum(o => o.Quantity), b.WasteQuantity,
+            b.Outputs.Sum(o => o.AllocatedCost),
+            userNames.TryGetValue(b.CreatedByUserId, out var name) ? name : "Unknown"
+        )).ToList();
+        return RespondCsv(rows, "processing.csv", format);
+    }
+
+    [HttpGet("yield")]
+    public async Task<ActionResult> Yield([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? format)
+    {
+        var query = _db.ProcessingBatches.Include(b => b.Inputs).Include(b => b.Outputs)
+            .Where(b => b.Status == ProcessingBatchStatus.Completed).AsQueryable();
+        if (from.HasValue) query = query.Where(b => b.ProcessingDate >= from);
+        if (to.HasValue) query = query.Where(b => b.ProcessingDate <= to);
+
+        var batches = await query.OrderByDescending(b => b.ProcessingDate).ToListAsync();
+        var rows = batches.Select(b =>
+        {
+            var input = b.Inputs.Sum(i => i.Quantity);
+            var usable = b.Outputs.Sum(o => o.Quantity);
+            var yieldPct = input > 0 ? Math.Round(usable / input * 100, 2) : 0;
+            return new YieldReportRow(b.BatchNumber, b.ProcessingDate, input, usable, b.WasteQuantity, yieldPct);
+        }).ToList();
+        return RespondCsv(rows, "yield.csv", format);
+    }
+
+    // Signed direction of each movement type for the daily-stock roll-forward below — the
+    // same classification used to reconcile CurrentStock against the transaction ledger.
+    private static decimal Signed(InventoryMovementType type, decimal qty) => type switch
+    {
+        InventoryMovementType.PURCHASE or InventoryMovementType.ADJUSTMENT_IN
+            or InventoryMovementType.RETURN_IN or InventoryMovementType.PROCESSING_IN => qty,
+        InventoryMovementType.SALE or InventoryMovementType.ADJUSTMENT_OUT or InventoryMovementType.WASTE
+            or InventoryMovementType.RETURN_OUT or InventoryMovementType.PROCESSING_OUT => -qty,
+        _ => 0
+    };
+
+    [HttpGet("daily-stock")]
+    public async Task<ActionResult> DailyStock([FromQuery] DateTime? date, [FromQuery] string? format)
+    {
+        var day = (date ?? DateTime.UtcNow).Date;
+        var dayEnd = day.AddDays(1);
+
+        var products = await _db.Products.Include(p => p.Category).Where(p => p.IsActive).OrderBy(p => p.Name).ToListAsync();
+        // CurrentStock is always the sum of every signed movement a product has ever had
+        // (verified by the production-readiness audit's inventory reconciliation), so a
+        // product's stock at the start of `day` is simply the sum of its movements
+        // strictly before that day — no separate "opening balance" table needed, and this
+        // works for any historical date, not just today.
+        var movements = await _db.InventoryTransactions
+            .Where(t => t.Date < dayEnd)
+            .Select(t => new { t.ProductId, t.MovementType, t.Quantity, t.Date })
+            .ToListAsync();
+
+        var rows = products.Select(p =>
+        {
+            var forProduct = movements.Where(m => m.ProductId == p.Id).ToList();
+            var opening = forProduct.Where(m => m.Date < day).Sum(m => Signed(m.MovementType, m.Quantity));
+            var within = forProduct.Where(m => m.Date >= day).ToList();
+
+            decimal Of(InventoryMovementType t) => within.Where(m => m.MovementType == t).Sum(m => m.Quantity);
+            var closing = opening + within.Sum(m => Signed(m.MovementType, m.Quantity));
+
+            return new DailyStockReportRow(
+                p.SKU, p.Name, p.ProductType.ToString(), p.Unit.ToString(),
+                opening, Of(InventoryMovementType.PURCHASE), Of(InventoryMovementType.PROCESSING_IN), Of(InventoryMovementType.PROCESSING_OUT),
+                Of(InventoryMovementType.SALE), Of(InventoryMovementType.WASTE),
+                Of(InventoryMovementType.ADJUSTMENT_IN), Of(InventoryMovementType.ADJUSTMENT_OUT),
+                Of(InventoryMovementType.RETURN_IN), Of(InventoryMovementType.RETURN_OUT),
+                closing
+            );
+        }).ToList();
+        return RespondCsv(rows, $"daily-stock-{day:yyyy-MM-dd}.csv", format);
+    }
+
+    [HttpGet("product-profit")]
+    public async Task<ActionResult> ProductProfit([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? format)
+    {
+        var start = from ?? new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = to ?? DateTime.UtcNow;
+
+        var items = await _db.SalesOrderItems.Include(i => i.Product).Include(i => i.SalesOrder)
+            .Where(i => i.SalesOrder!.OrderDate >= start && i.SalesOrder.OrderDate <= end
+                && i.SalesOrder.Status != SalesOrderStatus.Cancelled && i.SalesOrder.Status != SalesOrderStatus.Draft)
+            .ToListAsync();
+
+        // Historical cost per product, from the SALE movements' own UnitCost snapshot
+        // rather than the product's current price — see InventoryTransaction.UnitCost.
+        // Sales recorded before this field existed have no snapshot and cost 0 here; that
+        // is a known limitation, not a bug (documented in BUSINESS_WORKFLOW.md).
+        var costByProduct = await _db.InventoryTransactions
+            .Where(t => t.MovementType == InventoryMovementType.SALE && t.Date >= start && t.Date <= end)
+            .GroupBy(t => t.ProductId)
+            .Select(g => new { ProductId = g.Key, Cost = g.Sum(t => t.Quantity * (t.UnitCost ?? 0)) })
+            .ToDictionaryAsync(x => x.ProductId, x => x.Cost);
+
+        var rows = items.GroupBy(i => new { i.ProductId, Name = i.Product!.Name })
+            .Select(g =>
+            {
+                var qty = g.Sum(x => x.Quantity);
+                var revenue = g.Sum(x => x.Total);
+                var cost = costByProduct.TryGetValue(g.Key.ProductId, out var c) ? c : 0;
+                return new ProductProfitReportRow(g.Key.Name, qty, qty > 0 ? Math.Round(revenue / qty, 2) : 0, revenue, cost, revenue - cost);
+            })
+            .OrderByDescending(r => r.Revenue)
+            .ToList();
+        return RespondCsv(rows, "product-profit.csv", format);
+    }
+
+    private async Task<int?> WalkInCustomerIdAsync() =>
+        await _db.Customers.Where(c => c.CustomerCode == "CASH-001").Select(c => (int?)c.Id).FirstOrDefaultAsync();
+
+    [HttpGet("daily-profit")]
+    public async Task<ActionResult<DailyProfitDto>> DailyProfit([FromQuery] DateTime? date)
+    {
+        var day = (date ?? DateTime.UtcNow).Date;
+        var dayEnd = day.AddDays(1);
+        var walkInId = await WalkInCustomerIdAsync();
+
+        var orders = await _db.SalesOrders
+            .Where(o => o.OrderDate >= day && o.OrderDate < dayEnd && o.Status != SalesOrderStatus.Cancelled && o.Status != SalesOrderStatus.Draft)
+            .Select(o => new { o.CustomerId, o.GrandTotal })
+            .ToListAsync();
+
+        var cashSales = orders.Where(o => walkInId.HasValue && o.CustomerId == walkInId).Sum(o => o.GrandTotal);
+        var creditSales = orders.Where(o => !(walkInId.HasValue && o.CustomerId == walkInId)).Sum(o => o.GrandTotal);
+
+        // COGS for stock that physically left today, by the movement's own timestamp —
+        // see BUSINESS_WORKFLOW.md for why this can differ slightly from "orders placed
+        // today" when an order is drafted one day and confirmed the next.
+        var cogs = await _db.InventoryTransactions
+            .Where(t => t.MovementType == InventoryMovementType.SALE && t.Date >= day && t.Date < dayEnd)
+            .SumAsync(t => (decimal?)(t.Quantity * (t.UnitCost ?? 0))) ?? 0;
+
+        var expenses = await _db.Expenses.Where(e => e.Date >= day && e.Date < dayEnd).SumAsync(e => (decimal?)e.Amount) ?? 0;
+
+        var totalSales = cashSales + creditSales;
+        var grossProfit = totalSales - cogs;
+        var operating = grossProfit - expenses;
+
+        return Ok(new DailyProfitDto(day, cashSales, creditSales, totalSales, cogs, grossProfit, expenses, operating));
+    }
+
+    [HttpGet("cash-vs-credit")]
+    public async Task<ActionResult<CashVsCreditDto>> CashVsCredit([FromQuery] DateTime? from, [FromQuery] DateTime? to)
+    {
+        var start = from ?? new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var end = to ?? DateTime.UtcNow;
+        var walkInId = await WalkInCustomerIdAsync();
+
+        var orders = await _db.SalesOrders
+            .Where(o => o.OrderDate >= start && o.OrderDate <= end && o.Status != SalesOrderStatus.Cancelled && o.Status != SalesOrderStatus.Draft)
+            .Select(o => new { o.CustomerId, o.GrandTotal })
+            .ToListAsync();
+
+        var cash = orders.Where(o => walkInId.HasValue && o.CustomerId == walkInId).ToList();
+        var credit = orders.Where(o => !(walkInId.HasValue && o.CustomerId == walkInId)).ToList();
+
+        return Ok(new CashVsCreditDto(
+            cash.Sum(o => o.GrandTotal), cash.Count,
+            credit.Sum(o => o.GrandTotal), credit.Count,
+            cash.Sum(o => o.GrandTotal) + credit.Sum(o => o.GrandTotal)
+        ));
+    }
+
     [HttpGet("deliveries")]
     public async Task<ActionResult> Deliveries([FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] DeliveryStatus? status, [FromQuery] string? format)
     {

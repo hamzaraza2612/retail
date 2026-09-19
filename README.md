@@ -1,9 +1,10 @@
 # Chicken Wholesale & Supply — Business Management System
 
 A complete business management application for a chicken wholesale & supply operation:
-customers, suppliers, products, purchases, inventory, sales orders, invoices, payments,
-deliveries, employees, expenses, reports, users/roles and an audit log — all backed by a
-real relational database, not mock screens.
+customers, suppliers, products, purchases, inventory, chicken processing/cutting & yield
+costing, sales orders (cash and credit), invoices, payments, deliveries, employees,
+expenses, reports (including daily stock and daily profit/loss), users/roles and an audit
+log — all backed by a real relational database, not mock screens.
 
 ## Architecture
 
@@ -78,9 +79,13 @@ Seeded automatically on first run:
 | storekeeper  | Store@123    | Store Keeper |
 | delivery     | Delivery@123 | Delivery     |
 
-Seed data also includes 10 customers, 5 suppliers, 15 chicken products, sample purchases,
-sales orders, invoices, payments and expenses so every screen has real data to show from
-the first login.
+Seed data also includes 11 customers (10 real + the standing **Walk-in / Cash Customer**,
+code `CASH-001`, used for retail/cash sales), 5 suppliers, 17 products (16 finished + 1 raw
+material — "Raw Chicken (Whole Bird)"), sample purchases, sales orders, invoices, payments,
+expenses, and one **completed processing batch** (500KG raw chicken cut into Boneless,
+Breast, Tikka, Leg, Wings, Neck and Whole Chicken, with cost allocated by weight) so every
+screen — including Processing, the Yield report, and Daily Profit/Loss — has real data to
+show from the first login.
 
 ## Environment Variables
 
@@ -184,11 +189,21 @@ GET    /api/products/categories
 
 POST   /api/purchases                      Supplier + items → increases stock,
                                             creates payable, logs inventory movement
-GET    /api/inventory/dashboard
+GET    /api/inventory/dashboard             Raw + finished stock value, low-stock list
 GET    /api/inventory/movements
 POST   /api/inventory/adjust               Manual stock correction / waste / return
 
-POST   /api/orders                         Creates a Draft order (no stock impact yet)
+POST   /api/processing-batches             Raw material in, finished cuts out — starts
+                                            as Draft, no stock impact yet
+PUT    /api/processing-batches/{id}/status  Draft→Completed consumes raw stock, produces
+                                            finished stock, allocates cost by weight;
+                                            Completed→Cancelled reverses it exactly once
+                                            (see BUSINESS_WORKFLOW.md "Processing & Costing")
+
+POST   /api/orders                         Creates a Draft order (no stock impact yet).
+                                            Billed to the seeded "Walk-in / Cash Customer"
+                                            (code CASH-001) = a cash sale; any other
+                                            customer = a credit sale — same endpoint either way.
 PUT    /api/orders/{id}/status              Draft→Confirmed deducts stock once and
                                             generates the invoice; Cancelled restores it
 GET    /api/invoices/{id}                   Printable invoice data
@@ -205,7 +220,11 @@ GET/POST /api/expenses
 GET    /api/reports/{report-name}          daily-sales, monthly-sales, sales-by-customer,
                                             sales-by-product, purchases, receivables,
                                             payables, inventory, expenses, profit-summary,
-                                            payments, deliveries — all accept ?format=csv
+                                            payments, deliveries, processing, yield,
+                                            daily-stock, product-profit, daily-profit,
+                                            cash-vs-credit — all accept ?format=csv where
+                                            they return a list (daily-profit/cash-vs-credit
+                                            return a single summary object instead)
 
 GET/POST/PUT/DELETE /api/users             Admin only
 GET    /api/audit-logs                     Admin/Manager only
@@ -221,7 +240,7 @@ Enforced on the backend (`[Authorize(Roles = "...")]`), not just hidden in the U
 | Manager | Dashboard, Reports, Sales, Purchases, Inventory, Customers, Employees |
 | Sales | Customers, Orders, Invoices, Payments |
 | Cashier | Payments, Customers, Invoices, Expenses |
-| Store Keeper | Inventory, Purchases, Stock Adjustments, Suppliers |
+| Store Keeper | Inventory, Purchases, Processing/Cutting, Stock Adjustments, Suppliers |
 | Delivery | Assigned deliveries and delivery status updates |
 
 ## Backup & Restore (PostgreSQL)
@@ -289,6 +308,18 @@ off-host.
 
 - "Estimated Gross Profit" uses recorded purchase price as COGS — it is an estimate, not a
   reconciled accounting figure, and is labelled as such in the UI.
+- **Processing costing is weight-based, not a full manufacturing cost system**: it does not
+  implement FIFO/weighted-average raw material costing, and every output of a batch is
+  costed at the same per-KG rate regardless of cut. See BUSINESS_WORKFLOW.md "Processing /
+  Cutting & Costing" for the exact formula and what it deliberately does not claim.
+- **Historical cost snapshots** (`InventoryTransaction.UnitCost`) only exist for movements
+  recorded after this feature shipped — sales made before it show Rs. 0 estimated cost in
+  the Product Profit and Daily Profit/Loss reports specifically (all other figures,
+  including the pre-existing "Estimated Gross Profit", are unaffected).
+- No day-end financial "close/lock" — the brief for this feature explicitly allowed
+  skipping it in favor of prioritizing data integrity, so all reports are always read-only,
+  always-current views over the underlying ledger rather than a snapshot that could drift
+  out of sync with it.
 - No WhatsApp/SMS integration, no payroll module, no route optimization — these are
   explicitly out of scope for the MVP (see the task brief's P2 list).
 - Human-readable sequential codes (`CUST-2026-00010`, `PO-2026-00004`, ...) are generated

@@ -25,6 +25,9 @@ public class ApplicationDbContext : DbContext
     public DbSet<ExpenseCategory> ExpenseCategories => Set<ExpenseCategory>();
     public DbSet<Expense> Expenses => Set<Expense>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<ProcessingBatch> ProcessingBatches => Set<ProcessingBatch>();
+    public DbSet<ProcessingInput> ProcessingInputs => Set<ProcessingInput>();
+    public DbSet<ProcessingOutput> ProcessingOutputs => Set<ProcessingOutput>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -39,6 +42,7 @@ public class ApplicationDbContext : DbContext
         b.HasSequence<long>("payment_number_seq").StartsAt(1).IncrementsBy(1);
         b.HasSequence<long>("supplier_payment_number_seq").StartsAt(1).IncrementsBy(1);
         b.HasSequence<long>("employee_code_seq").StartsAt(1).IncrementsBy(1);
+        b.HasSequence<long>("processing_batch_number_seq").StartsAt(1).IncrementsBy(1);
 
         // ---- Decimal precision (money = 18,2; quantities = 18,3) ----
         foreach (var entityType in b.Model.GetEntityTypes())
@@ -74,6 +78,11 @@ public class ApplicationDbContext : DbContext
         b.Entity<Delivery>().Property(x => x.Status).HasConversion<string>();
         b.Entity<Employee>().Property(x => x.Status).HasConversion<string>();
         b.Entity<Expense>().Property(x => x.PaymentMethod).HasConversion<string>();
+        b.Entity<Product>().Property(x => x.ProductType).HasConversion<string>();
+        b.Entity<ProcessingBatch>().Property(x => x.Status).HasConversion<string>();
+        b.Entity<ProcessingBatch>().Property(x => x.WasteUnit).HasConversion<string>();
+        b.Entity<ProcessingInput>().Property(x => x.Unit).HasConversion<string>();
+        b.Entity<ProcessingOutput>().Property(x => x.Unit).HasConversion<string>();
 
         // ---- Unique indexes ----
         b.Entity<User>().HasIndex(x => x.Username).IsUnique();
@@ -88,6 +97,7 @@ public class ApplicationDbContext : DbContext
         b.Entity<SupplierPayment>().HasIndex(x => x.PaymentNumber).IsUnique();
         b.Entity<Employee>().HasIndex(x => x.EmployeeCode).IsUnique();
         b.Entity<User>().HasIndex(x => x.EmployeeId).IsUnique();
+        b.Entity<ProcessingBatch>().HasIndex(x => x.BatchNumber).IsUnique();
 
         // ---- Useful search indexes ----
         b.Entity<Customer>().HasIndex(x => x.BusinessName);
@@ -97,6 +107,7 @@ public class ApplicationDbContext : DbContext
         b.Entity<SalesOrder>().HasIndex(x => x.OrderDate);
         b.Entity<Purchase>().HasIndex(x => x.PurchaseDate);
         b.Entity<AuditLog>().HasIndex(x => x.Timestamp);
+        b.Entity<ProcessingBatch>().HasIndex(x => x.ProcessingDate);
 
         // ---- Relationships requiring Restrict to avoid multiple cascade paths ----
         b.Entity<PurchaseItem>()
@@ -167,5 +178,19 @@ public class ApplicationDbContext : DbContext
         b.Entity<User>()
             .HasOne(x => x.Employee).WithOne()
             .HasForeignKey<User>(x => x.EmployeeId).OnDelete(DeleteBehavior.SetNull);
+
+        b.Entity<ProcessingInput>()
+            .HasOne(x => x.ProcessingBatch).WithMany(x => x.Inputs)
+            .HasForeignKey(x => x.ProcessingBatchId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ProcessingInput>()
+            .HasOne(x => x.Product).WithMany()
+            .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
+
+        b.Entity<ProcessingOutput>()
+            .HasOne(x => x.ProcessingBatch).WithMany(x => x.Outputs)
+            .HasForeignKey(x => x.ProcessingBatchId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<ProcessingOutput>()
+            .HasOne(x => x.Product).WithMany()
+            .HasForeignKey(x => x.ProductId).OnDelete(DeleteBehavior.Restrict);
     }
 }

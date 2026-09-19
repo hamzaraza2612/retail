@@ -17,5 +17,6 @@ public record InventoryMovementDto(
 );
 
 public record InventoryDashboardDto(
-    int TotalProducts, int LowStockCount, decimal TotalStockValue, List<ProductDto> LowStockProducts
+    int TotalProducts, int LowStockCount, decimal TotalStockValue, List<ProductDto> LowStockProducts,
+    decimal RawStockValue, decimal FinishedStockValue, int RawMaterialCount, int FinishedProductCount
 );

@@ -193,8 +193,13 @@ public class SalesOrdersController : ControllerBase
             {
                 foreach (var item in order.Items)
                 {
+                    // unitCost snapshots the product's current cost basis at the moment of
+                    // sale, so product-profit/daily-profit reports can compute historically
+                    // correct COGS even if the product's cost changes later (e.g. a later
+                    // processing batch reallocates its cost). See InventoryTransaction.UnitCost.
                     await _inventory.ApplyMovementAsync(item.ProductId, -item.Quantity, InventoryMovementType.SALE,
-                        "SalesOrder", order.Id, $"Order {order.OrderNumber}", allowNegative: false);
+                        "SalesOrder", order.Id, $"Order {order.OrderNumber}", allowNegative: false,
+                        unitCost: item.Product?.PurchasePrice);
                 }
 
                 var invoice = new Invoice

@@ -15,6 +15,7 @@ const colorMap: Record<string, string> = {
   Paid: "bg-green-100 text-green-700",
   Active: "bg-green-100 text-green-700",
   Inactive: "bg-gray-100 text-gray-700",
+  Completed: "bg-green-100 text-green-700",
 };
 
 export default function Badge({ value }: { value: string }) {

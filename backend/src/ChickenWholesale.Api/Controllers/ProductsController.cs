@@ -24,12 +24,13 @@ public class ProductsController : ControllerBase
 
     private static ProductDto ToDto(Product p) => new(
         p.Id, p.SKU, p.Name, p.CategoryId, p.Category?.Name ?? "", p.Unit, p.PurchasePrice,
-        p.SalePrice, p.MinimumStock, p.CurrentStock, p.Description, p.IsActive, p.CreatedAt, p.UpdatedAt);
+        p.SalePrice, p.MinimumStock, p.CurrentStock, p.Description, p.IsActive, p.CreatedAt, p.UpdatedAt, p.ProductType);
 
     [HttpGet]
     public async Task<ActionResult<PagedResult<ProductDto>>> GetAll(
         [FromQuery] string? search, [FromQuery] int? categoryId, [FromQuery] bool? active,
-        [FromQuery] bool? lowStock, [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
+        [FromQuery] bool? lowStock, [FromQuery] ProductType? productType,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 50)
     {
         var query = _db.Products.Include(p => p.Category).AsQueryable();
         if (!string.IsNullOrWhiteSpace(search))
@@ -37,6 +38,7 @@ public class ProductsController : ControllerBase
         if (categoryId.HasValue) query = query.Where(p => p.CategoryId == categoryId);
         if (active.HasValue) query = query.Where(p => p.IsActive == active);
         if (lowStock == true) query = query.Where(p => p.CurrentStock <= p.MinimumStock);
+        if (productType.HasValue) query = query.Where(p => p.ProductType == productType);
 
         var total = await query.CountAsync();
         var items = await query.OrderBy(p => p.Name)
@@ -97,7 +99,8 @@ public class ProductsController : ControllerBase
             MinimumStock = req.MinimumStock,
             CurrentStock = 0,
             Description = req.Description,
-            IsActive = true
+            IsActive = true,
+            ProductType = req.ProductType
         };
         _db.Products.Add(product);
         await _db.SaveChangesAsync();
@@ -121,6 +124,7 @@ public class ProductsController : ControllerBase
         product.MinimumStock = req.MinimumStock;
         product.Description = req.Description;
         product.IsActive = req.IsActive;
+        product.ProductType = req.ProductType;
         product.UpdatedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
         await _audit.LogAsync("UPDATE", "Product", product.Id.ToString(), $"Updated product {product.Name}");

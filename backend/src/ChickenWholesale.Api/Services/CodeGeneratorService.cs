@@ -43,4 +43,5 @@ public class CodeGeneratorService
     public Task<string> NextPaymentNumberAsync() => NextAsync("PAY", "payment_number_seq");
     public Task<string> NextSupplierPaymentNumberAsync() => NextAsync("SPAY", "supplier_payment_number_seq");
     public Task<string> NextEmployeeCodeAsync() => NextAsync("EMP", "employee_code_seq");
+    public Task<string> NextProcessingBatchNumberAsync() => NextAsync("PB", "processing_batch_number_seq");
 }

@@ -54,7 +54,32 @@ public enum InventoryMovementType
     ADJUSTMENT_OUT,
     WASTE,
     RETURN_IN,
-    RETURN_OUT
+    RETURN_OUT,
+    // Raw material consumed as processing-batch input, and finished goods produced as
+    // processing-batch output — kept distinct from PURCHASE/SALE so stock and yield
+    // reports can tell "bought directly" apart from "produced by cutting/processing".
+    PROCESSING_IN,
+    PROCESSING_OUT
+}
+
+/// <summary>
+/// Whether a product is consumed as processing input (RawMaterial) or is a sellable end
+/// item (FinishedProduct, whether it was purchased directly or produced by a processing
+/// batch — both are ordinary sellable stock once they exist). Existing products created
+/// before this classification existed default to FinishedProduct (see migration
+/// AddProcessingAndProductType) since they were already being purchased and sold directly.
+/// </summary>
+public enum ProductType
+{
+    RawMaterial,
+    FinishedProduct
+}
+
+public enum ProcessingBatchStatus
+{
+    Draft,
+    Completed,
+    Cancelled
 }
 
 public enum SalesOrderStatus

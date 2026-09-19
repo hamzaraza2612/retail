@@ -2,7 +2,13 @@ namespace ChickenWholesale.Api.DTOs;
 
 public record DashboardCardsDto(
     decimal TodaySales, int TodayOrders, decimal TodayPurchases, decimal TodayExpenses,
-    decimal TotalReceivables, decimal TotalPayables, decimal StockValue, decimal EstimatedGrossProfitThisMonth
+    decimal TotalReceivables, decimal TotalPayables, decimal StockValue, decimal EstimatedGrossProfitThisMonth,
+    // Processing & daily P&L (section 31) — additive fields, appended so the existing
+    // dashboard fields above keep their original meaning and position.
+    decimal TodayCashSales, decimal TodayCreditSales,
+    decimal TodayEstimatedGrossProfit, decimal TodayOperatingProfitLoss,
+    int TodayProcessingBatches, decimal TodayRawMaterialProcessed, decimal TodayProducedQuantity,
+    decimal RawStockValue, decimal FinishedStockValue
 );
 
 public record DailyPointDto(string Date, decimal Value);
