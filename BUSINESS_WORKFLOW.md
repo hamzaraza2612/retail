@@ -121,13 +121,29 @@ exactly as if it had just been "purchased" at that rate. This never rewrites his
   cost, never a "premium cut" adjustment.
 - An estimate, always labelled as such in reports (see "Daily Profit/Loss" below).
 
+**Important operational note — keep `PurchasePrice` current.** Because the raw material's
+cost basis at completion time is simply `Product.PurchasePrice`, and purchases never
+auto-update that field (see "Cost history" below), if the market rate for raw chicken
+changes, a store keeper must open the Products screen and update the raw material's
+`PurchasePrice` **before** completing the next processing batch — otherwise the batch will
+be costed at the old, stale rate. This is not a bug; it is a consequence of the app not
+implementing FIFO/weighted-average purchase costing, listed as a known limitation below.
+
 **Reversing a batch.** Cancelling a **Draft** batch is free (nothing was ever touched).
 Cancelling a **Completed** batch restores the raw material and removes the produced
-finished stock — but only if *all* of that finished stock is still on hand. If any of it
-has already been sold, the cancellation is rejected outright (a normal `InsufficientStockException`,
-the same guard that prevents overselling) rather than driving that product's stock
-negative. This is a deliberate, conservative choice: a completed batch's sold output cannot
-be silently un-produced.
+finished stock — but only if none of that batch's output has been sold or otherwise moved
+out of stock yet. Because finished stock is a single fungible pool per product with no
+per-batch/lot tracking, the app cannot know for certain which specific units a later sale
+consumed — so, conservatively, if *any* sale (or waste/adjustment/further processing) of
+a product has happened since a batch's output joined that product's stock, cancelling that
+batch is rejected outright, even if enough *unrelated* stock (from another batch, or a
+direct purchase) happens to still be sitting in the pool. A real UAT run with two same-day
+batches both producing Boneless Chicken caught the earlier, looser version of this check —
+which only verified that the reversal wouldn't take stock negative — silently allowing a
+cancellation after part of that exact batch's output had already been invoiced to a
+customer. Data integrity over cancellation convenience: cancel is for catching a mistake
+immediately after completing a batch, before anything of that product has moved — not a
+tool for editing processing history after the fact.
 
 **Raw vs. finished stock** are shown separately everywhere it matters: the Inventory page
 splits stock into a "Raw Material Stock" and "Finished Product Stock" panel with their own
@@ -172,9 +188,17 @@ runs in one transaction:
 ### Cancelling
 
 Cancelling a **Confirmed** (or later) order reverses the effect: stock is restored via a
-`RETURN_IN` movement, the customer's balance is reduced back down, and `StockDeducted` is
-cleared. A **Draft** order can simply be cancelled with no side effects since nothing was
-committed yet. Cancelled orders are kept, not deleted — they remain visible for audit.
+`RETURN_IN` movement, the customer's balance is reduced back down, `StockDeducted` is
+cleared, and the invoice generated at confirmation time is zeroed out (its totals and
+balance set to 0, marked `Paid`) rather than left behind — a UAT run caught an earlier
+version of this leaving that invoice untouched, still showing its original amount as an
+outstanding receivable even though the customer's real balance no longer included it. The
+order itself is also updated so its own `RemainingAmount` reads 0 (the Orders screen shows
+this directly), so a cancelled order never displays a contradictory "still owed" figure.
+Only the invoice/order's *financial* fields are reset — `PaidAmount` (what was genuinely
+collected before cancellation, if any) is left as the historical record. A **Draft** order
+can simply be cancelled with no side effects since nothing was committed yet. Cancelled
+orders are kept, not deleted — they remain visible for audit.
 
 ## 5. Invoice
 

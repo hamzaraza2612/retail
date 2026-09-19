@@ -269,13 +269,50 @@ public class ProcessingBatchesController : ControllerBase
     /// <summary>
     /// Reverses a Completed batch's stock movements exactly once. Restoring the raw
     /// material is always safe (stock only goes up). Removing the finished output is only
-    /// safe if none of it has been sold or otherwise consumed yet — ApplyMovementAsync's
-    /// atomic "don't go negative" check enforces that, and throws InsufficientStockException
-    /// (translated to a 400 by ExceptionMiddleware) if some has already left stock, which
-    /// rolls back the whole reversal rather than leaving it half-applied.
+    /// safe if none of it has been sold or otherwise consumed yet.
+    ///
+    /// Finished stock is a fungible pool with no per-batch/lot tracking (see
+    /// BUSINESS_WORKFLOW.md "Costing model — what this is not"), so a plain "would this
+    /// reversal take current stock negative" check is not sufficient: if another batch's
+    /// output of the same product is still sitting in the pool, that unrelated stock can
+    /// mask the fact that units from THIS batch were already sold — the reversal would then
+    /// succeed while double-counting the raw material (added back as if never processed)
+    /// and silently erasing value that already left the building on an invoice. UAT caught
+    /// this exact case with two same-day batches both producing Boneless Chicken. So before
+    /// touching any stock, explicitly refuse to cancel if any unit of one of this batch's
+    /// own output products has left stock (sold, wasted, adjusted out, or consumed by a
+    /// later processing batch) since the moment this batch's own output joined the pool —
+    /// a deliberately conservative check given there is no lot tracking to be more precise.
     /// </summary>
+    private static readonly InventoryMovementType[] OutgoingMovementTypes =
+    {
+        InventoryMovementType.SALE, InventoryMovementType.ADJUSTMENT_OUT, InventoryMovementType.WASTE,
+        InventoryMovementType.RETURN_OUT, InventoryMovementType.PROCESSING_OUT
+    };
+
     private async Task ReverseAsync(ProcessingBatch batch)
     {
+        foreach (var output in batch.Outputs)
+        {
+            var joinedPoolAt = await _db.InventoryTransactions
+                .Where(t => t.ProductId == output.ProductId && t.ReferenceType == "ProcessingBatch"
+                    && t.ReferenceId == batch.Id && t.MovementType == InventoryMovementType.PROCESSING_IN)
+                .Select(t => (DateTime?)t.Date)
+                .FirstOrDefaultAsync();
+
+            if (joinedPoolAt == null) continue;
+
+            var soldSince = await _db.InventoryTransactions.AnyAsync(t =>
+                t.ProductId == output.ProductId && t.Date >= joinedPoolAt && OutgoingMovementTypes.Contains(t.MovementType));
+
+            if (soldSince)
+            {
+                var product = await _db.Products.AsNoTracking().FirstAsync(p => p.Id == output.ProductId);
+                throw new InvalidOperationException(
+                    $"Cannot cancel this processing batch: some of its output ('{product.Name}') has already been sold or otherwise moved out of stock.");
+            }
+        }
+
         foreach (var output in batch.Outputs)
         {
             await _inventory.ApplyMovementAsync(output.ProductId, -output.Quantity, InventoryMovementType.ADJUSTMENT_OUT,

@@ -103,6 +103,18 @@ See `.env.example` for the full list. Key ones:
 
 Never commit a real `.env` file — only `.env.example` is checked in.
 
+**Deploying without `docker-compose.yml`** (e.g. a bare `docker run`, an ECS task
+definition, a Kubernetes manifest): the variable names above (`JWT_KEY`,
+`CONNECTION_STRING`, ...) are `docker-compose.yml`'s own host-side names — it is what
+translates them into the container-side names ASP.NET Core's configuration system actually
+reads (`Jwt__Key`, `ConnectionStrings__DefaultConnection`, double underscore, no
+`docker-compose.yml` equivalent elsewhere). Outside compose, set the container-side names
+directly. Getting this wrong is safe, not silent: the container-side name simply won't be
+found, so the app falls back to the placeholder in `appsettings.json`, which the same
+production-safety check refuses to start with — you'll see the "Refusing to start in
+Production..." error rather than a running container quietly signing tokens with a
+well-known key.
+
 ## Local Development (without Docker)
 
 **Backend**
@@ -260,12 +272,17 @@ or restore into a fresh database as shown below) — `psql` will otherwise emit 
 errors partway through and leave the target in a mixed state.
 
 **These exact commands were run against this project's own seeded data** as part of
-production-readiness verification: `pg_dump` produced a ~50KB SQL file, it was restored into
-a separate `restore_test_db` database on the same Postgres instance, and every table's row
+production-readiness verification, most recently during the business UAT pass covering the
+processing/cutting feature: `pg_dump` produced an ~85KB SQL file, it was restored into a
+separate `restore_test_db` database on the same Postgres instance, and every table's row
 count (`Users`, `Customers`, `Suppliers`, `Products`, `Purchases`, `SalesOrders`, `Invoices`,
-`Payments`, `Employees`, `Expenses`, `AuditLogs`) plus a spot-check of actual row content
-(customer balances, a user's bcrypt password hash) matched the source database exactly
-before the test database was dropped. No manual data-fixing was required.
+`Payments`, `Employees`, `Expenses`, `AuditLogs`, `InventoryTransactions`,
+`ProcessingBatches`, `ProcessingInputs`, `ProcessingOutputs`) plus a spot-check of actual row
+content (customer balances, a user's bcrypt password hash) matched the source database
+exactly. A temporary API container was then started with its connection string pointed at
+the restored database and a production-strength `JWT_KEY`, and login, products, customers,
+inventory movements, orders, and reports were all confirmed to serve correct data from it
+before the test container and database were removed. No manual data-fixing was required.
 
 For anything beyond ad-hoc local backups, schedule `pg_dump` via cron and store the output
 off-host.
@@ -311,7 +328,17 @@ off-host.
 - **Processing costing is weight-based, not a full manufacturing cost system**: it does not
   implement FIFO/weighted-average raw material costing, and every output of a batch is
   costed at the same per-KG rate regardless of cut. See BUSINESS_WORKFLOW.md "Processing /
-  Cutting & Costing" for the exact formula and what it deliberately does not claim.
+  Cutting & Costing" for the exact formula and what it deliberately does not claim. A direct
+  consequence: a raw material's cost basis at processing time is its `Product.PurchasePrice`
+  field, which purchases never auto-update — if the market rate changes, a store keeper must
+  manually update that price on the Products screen before completing the next batch, or it
+  will be costed at the old rate.
+- **A completed processing batch can only be cancelled before any of its output has been
+  sold.** Finished stock is a single pool per product with no per-batch/lot tracking, so once
+  any sale of a product happens after a batch produced some of it, that batch (and any other
+  batch that also produced that product) can no longer be cancelled — there is no reliable
+  way to prove which batch's units were sold. This is intentionally conservative (a UAT run
+  caught the looser, pre-fix version of this check silently allowing exactly this).
 - **Historical cost snapshots** (`InventoryTransaction.UnitCost`) only exist for movements
   recorded after this feature shipped — sales made before it show Rs. 0 estimated cost in
   the Product Profit and Daily Profit/Loss reports specifically (all other figures,

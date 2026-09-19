@@ -250,7 +250,85 @@ public class ProcessingBatchTests
         Assert.Equal(ProcessingBatchStatus.Completed, reloadedDto.Status);
     }
 
-    // ---------- 11, 12. Cash sale vs credit sale, feeding cash-vs-credit + daily-profit ----------
+    /// <summary>
+    /// UAT-discovered blocker: finished stock is a fungible pool with no per-batch/lot
+    /// tracking. When TWO completed batches both produce the same finished product,
+    /// cancelling the SECOND batch after some of ITS output was sold used to be allowed as
+    /// long as the FIRST batch's still-unsold output covered the reversal quantity in
+    /// aggregate — i.e. the old guard only checked "would this take total stock negative",
+    /// not "was this batch's own output actually sold". That silently double-counted the
+    /// raw material (added back as if this batch was never processed) while the sale that
+    /// already happened kept its own historical cost snapshot untouched — a real,
+    /// non-obvious accounting corruption a store keeper could trigger by cancelling an old
+    /// batch days after its output had already moved. Fixed by refusing to reverse a
+    /// batch's output if ANY unit of that output product left stock (sold, wasted,
+    /// adjusted out, or consumed by later processing) since this batch's own output joined
+    /// the pool, regardless of how much unrelated stock happens to still be on hand.
+    /// </summary>
+    [Fact]
+    public async Task Cancel_CompletedBatch_RejectedIfOutputSold_EvenWhenAnotherBatchsStockMasksIt()
+    {
+        var db = TestHelpers.CreateDb();
+        var (raw, boneless, breast) = await SeedIngredientsAsync(db, rawStock: 800);
+        var controller = MakeController(db);
+
+        // Batch A: produces 300kg boneless.
+        var batchACreate = await controller.Create(new CreateProcessingBatchRequest(
+            null, new List<ProcessingInputRequest> { new(raw.Id, 500) },
+            new List<ProcessingOutputRequest> { new(boneless.Id, 300), new(breast.Id, 180) }, 20, null, null));
+        var batchA = Assert.IsType<ProcessingBatchDto>(Assert.IsType<OkObjectResult>(batchACreate.Result).Value);
+        await controller.UpdateStatus(batchA.Id, new UpdateProcessingBatchStatusRequest(ProcessingBatchStatus.Completed));
+
+        // Batch B: produces a much smaller 90kg of the same boneless product.
+        var batchBCreate = await controller.Create(new CreateProcessingBatchRequest(
+            null, new List<ProcessingInputRequest> { new(raw.Id, 300) },
+            new List<ProcessingOutputRequest> { new(boneless.Id, 90), new(breast.Id, 198) }, 12, null, null));
+        var batchB = Assert.IsType<ProcessingBatchDto>(Assert.IsType<OkObjectResult>(batchBCreate.Result).Value);
+        await controller.UpdateStatus(batchB.Id, new UpdateProcessingBatchStatusRequest(ProcessingBatchStatus.Completed));
+
+        Assert.Equal(390, await TestHelpers.FreshStock(db, boneless.Id)); // 300 + 90 pooled together
+
+        // Sell 40kg of boneless through the real sales flow (a genuine SALE ledger entry,
+        // not a direct stock edit) — the pool doesn't distinguish which batch it came from.
+        var hotel = await TestHelpers.SeedCustomerAsync(db);
+        var currentUser = TestHelpers.CreateCurrentUser();
+        var ordersController = new SalesOrdersController(db, new AuditService(db, currentUser), new CodeGeneratorService(db),
+            new InventoryService(db, currentUser), new LedgerService(db), currentUser);
+        var order = await ordersController.Create(new CreateSalesOrderRequest(
+            hotel.Id, null, null, new List<SalesOrderItemRequest> { new(boneless.Id, 40, 1050) }, 0, 0, 0, null));
+        var orderDto = Assert.IsType<SalesOrderDto>(Assert.IsType<OkObjectResult>(order.Result).Value);
+        await ordersController.UpdateStatus(orderDto.Id, new UpdateOrderStatusRequest(SalesOrderStatus.Confirmed));
+
+        Assert.Equal(350, await TestHelpers.FreshStock(db, boneless.Id)); // 390 - 40
+
+        // Cancelling Batch B only needs to remove 90kg from a 350kg pool — nowhere near
+        // negative — so the old "stock non-negative" guard would have let this through even
+        // though 40kg of exactly this batch's own output already left the building.
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await controller.UpdateStatus(batchB.Id, new UpdateProcessingBatchStatusRequest(ProcessingBatchStatus.Cancelled)));
+
+        // Nothing must have moved: no raw material double-counted back in, no finished
+        // stock removed, batch still Completed.
+        Assert.Equal(350, await TestHelpers.FreshStock(db, boneless.Id));
+        Assert.Equal(0, await TestHelpers.FreshStock(db, raw.Id));
+        var reloaded = await controller.GetById(batchB.Id);
+        var reloadedDto = Assert.IsType<ProcessingBatchDto>(Assert.IsType<OkObjectResult>(reloaded.Result).Value);
+        Assert.Equal(ProcessingBatchStatus.Completed, reloadedDto.Status);
+
+        // Batch A produced boneless earlier too, and the same sale happened after Batch A's
+        // output joined the pool as well — with no lot tracking there is no way to prove
+        // the 40kg sold came from Batch B and not Batch A, so the same conservative rule
+        // correctly refuses to cancel Batch A either, rather than guessing. This is the
+        // accepted cost of not implementing FIFO/lot-level costing (see BUSINESS_WORKFLOW.md):
+        // once any sale of a product happens, batches that produced it become "locked in"
+        // and can no longer be cancelled — cancel is for catching a mistake immediately
+        // after completing a batch, not for editing processing history after the fact.
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await controller.UpdateStatus(batchA.Id, new UpdateProcessingBatchStatusRequest(ProcessingBatchStatus.Cancelled)));
+        Assert.Equal(350, await TestHelpers.FreshStock(db, boneless.Id));
+    }
+
+    // ---------- 11, 12. Cash sale vs credit sale, feeding cash-vs-credit / daily-profit ----------
     [Fact]
     public async Task CashSale_AgainstWalkInCustomer_ReducesStockAndIsClassifiedAsCash()
     {

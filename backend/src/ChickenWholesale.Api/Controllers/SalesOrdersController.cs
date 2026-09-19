@@ -187,6 +187,39 @@ public class SalesOrdersController : ControllerBase
                     }
                     await _ledger.AdjustCustomerBalanceAsync(order.CustomerId, -order.RemainingAmount);
                     order.StockDeducted = false;
+
+                    // Confirming this order earlier created an Invoice (see the Confirmed
+                    // branch below) — UAT caught that cancelling left it behind untouched,
+                    // still showing its pre-cancellation GrandTotal/BalanceAmount as an
+                    // outstanding receivable even though the sale it billed no longer
+                    // exists. The running customer balance above is correctly adjusted, but
+                    // the invoice record itself becomes a stale, orphaned "ghost debt" that
+                    // an Invoices list or receivables report would keep showing forever.
+                    // Zero it out (rather than deleting it, so the invoice number and audit
+                    // trail stay intact) and mark it settled, consistent with how the rest
+                    // of the app already treats a zero balance as Paid.
+                    var invoice = await _db.Invoices.FirstOrDefaultAsync(i => i.SalesOrderId == order.Id);
+                    if (invoice != null)
+                    {
+                        invoice.Subtotal = 0;
+                        invoice.Discount = 0;
+                        invoice.DeliveryCharges = 0;
+                        invoice.GrandTotal = 0;
+                        invoice.PaidAmount = 0;
+                        invoice.BalanceAmount = 0;
+                        invoice.PaymentStatus = PaymentStatus.Paid;
+                    }
+
+                    // The Orders list/detail screens render order.RemainingAmount directly
+                    // (see List.tsx/Detail.tsx) — UAT caught it still showing the
+                    // pre-cancellation amount in red, as if the customer still owed it, even
+                    // though the ledger adjustment right above already correctly zeroed the
+                    // real outstanding balance. Clear it here too so the order itself doesn't
+                    // contradict its own Cancelled status. order.PaidAmount is left alone —
+                    // it is the historical record of what was genuinely collected before
+                    // cancellation, which cancelling does not undo.
+                    order.RemainingAmount = 0;
+                    order.PaymentStatus = PaymentStatus.Paid;
                 }
             }
             else if (req.Status == SalesOrderStatus.Confirmed)
