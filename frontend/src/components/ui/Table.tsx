@@ -14,7 +14,7 @@ interface Props<T> {
   keyFn: (row: T) => string | number;
 }
 
-export default function Table<T>({ columns, rows, loading, emptyMessage = "No records found.", keyFn }: Props<T>) {
+export default function Table<T>({ columns, rows, loading, emptyMessage = "Nothing here yet.", keyFn }: Props<T>) {
   return (
     <div className="overflow-x-auto bg-white rounded-lg border border-gray-200">
       <table className="min-w-full text-sm">

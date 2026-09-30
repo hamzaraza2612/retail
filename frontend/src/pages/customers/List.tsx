@@ -114,15 +114,21 @@ export default function CustomersList() {
         loading={loading}
         rows={data.items}
         columns={[
-          { header: "Code", render: (c) => <Link to={`/customers/${c.id}`} className="text-green-700 font-medium">{c.customerCode}</Link> },
-          { header: "Business Name", render: (c) => c.businessName },
-          { header: "Type", render: (c) => c.customerType },
-          { header: "Phone", render: (c) => c.phone },
-          { header: "City", render: (c) => c.city ?? "-" },
-          { header: "Balance", render: (c) => <span className={c.currentBalance > 0 ? "text-red-600 font-medium" : ""}>{formatMoney(c.currentBalance)}</span> },
-          { header: "Status", render: (c) => (c.isActive ? <span className="text-green-600 text-xs">Active</span> : <span className="text-gray-400 text-xs">Inactive</span>) },
           {
-            header: "Actions",
+            header: "Customer",
+            render: (c) => (
+              <Link to={`/customers/${c.id}`} className="text-green-700 font-medium">
+                {c.businessName}
+                {!c.isActive && <span className="ml-2 text-gray-400 text-xs font-normal">(Inactive)</span>}
+                <span className="block text-gray-400 text-xs font-normal">{c.customerCode}</span>
+              </Link>
+            ),
+          },
+          { header: "Type", render: (c) => c.customerType },
+          { header: "Due", render: (c) => <span className={c.currentBalance > 0 ? "text-red-600 font-medium" : ""}>{formatMoney(c.currentBalance)}</span> },
+          { header: "Phone", render: (c) => c.phone },
+          {
+            header: "Action",
             render: (c) => (
               <div className="flex gap-2">
                 <button className="text-blue-600 text-xs" onClick={() => openEdit(c)}>Edit</button>
@@ -136,9 +142,9 @@ export default function CustomersList() {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? "Edit Customer" : "New Customer"} wide>
         <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-x-4">
-          <Input label="Business Name" required value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} />
+          <Input label="Business Name" aria-label="Business Name" required value={form.businessName} onChange={(e) => setForm({ ...form, businessName: e.target.value })} />
           <Input label="Contact Person" value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} />
-          <Input label="Phone" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <Input label="Phone" aria-label="Phone" required value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           <Input label="WhatsApp" value={form.whatsApp} onChange={(e) => setForm({ ...form, whatsApp: e.target.value })} />
           <Select label="Customer Type" value={form.customerType} onChange={(e) => setForm({ ...form, customerType: e.target.value as CustomerType })}>
             {CUSTOMER_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}

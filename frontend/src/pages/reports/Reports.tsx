@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../../api/client";
 import { reportsApi } from "../../api/endpoints";
 import { Card } from "../../components/ui/Card";
@@ -17,9 +18,9 @@ const REPORTS: { key: ReportKey; label: string }[] = [
   { key: "sales-by-customer", label: "Sales by Customer" },
   { key: "sales-by-product", label: "Sales by Product" },
   { key: "purchases", label: "Purchases" },
-  { key: "receivables", label: "Customer Receivables / Outstanding" },
-  { key: "payables", label: "Supplier Payables" },
-  { key: "inventory", label: "Inventory / Closing Stock" },
+  { key: "receivables", label: "Customer Due" },
+  { key: "payables", label: "Supplier Due" },
+  { key: "inventory", label: "Stock Report" },
   { key: "expenses", label: "Expenses" },
   { key: "profit-summary", label: "Profit Summary (Monthly)" },
   { key: "payments", label: "Customer Payments" },
@@ -34,6 +35,49 @@ const REPORTS: { key: ReportKey; label: string }[] = [
 
 // Reports keyed by a single point-in-time date rather than a from/to range.
 const SINGLE_DATE_REPORTS: ReportKey[] = ["daily-stock", "daily-profit"];
+
+// The business questions an owner actually opens Reports to answer, in the order they care
+// about them. "Today's Business" and "Stock" already have their own dedicated, simplified
+// pages, so those two are shortcuts rather than report runs; the rest jump straight into the
+// existing report tool below with the right report pre-selected and already run. Nothing
+// about the report tool itself — its data, its date filters, CSV export — changes; this is
+// just a faster way to reach the reports people ask for most.
+const QUICK_REPORTS: ({ label: string } & ({ kind: "link"; to: string } | { kind: "report"; key: ReportKey }))[] = [
+  { label: "Today's Business", kind: "link", to: "/" },
+  { label: "Stock", kind: "link", to: "/inventory" },
+  { label: "Customer Due", kind: "report", key: "receivables" },
+  { label: "Product Profit", kind: "report", key: "product-profit" },
+  { label: "Processing/Yield", kind: "report", key: "yield" },
+  { label: "Cash vs Credit", kind: "report", key: "cash-vs-credit" },
+  { label: "Sales", kind: "report", key: "daily-sales" },
+  { label: "Purchases", kind: "report", key: "purchases" },
+  { label: "Expenses", kind: "report", key: "expenses" },
+];
+
+const quickReportClass =
+  "flex items-center justify-center text-center font-semibold text-sm rounded-lg px-3 py-4 bg-green-600 text-white hover:bg-green-700 transition-colors";
+
+// Two kinds of relabeling for these auto-generated column/summary headers: current costing
+// is weight-based (see BUSINESS_WORKFLOW.md), so every profit-shaped number this app
+// produces is an estimate, never a full accounting-grade actual profit — "Estimated" is
+// always attached to those labels, not just buried in a footnote. The rest just swap
+// accounting terms (Receivable/Payable/Outstanding) for the plain "Due" wording used
+// everywhere else in the app. Nothing about the underlying figures changes.
+const FIELD_LABEL_OVERRIDES: Record<string, string> = {
+  grossProfit: "Estimated Gross Profit",
+  totalCogs: "Estimated Cost of Goods Sold",
+  estimatedCogs: "Estimated Cost of Goods Sold",
+  estimatedCost: "Estimated Cost",
+  operatingProfitLoss: "Estimated Operating Result",
+  netEstimatedProfit: "Estimated Net Profit",
+  outstandingBalance: "Due",
+  outstandingReceivables: "Customer Due",
+  outstandingPayables: "Supplier Due",
+};
+
+function labelFor(key: string): string {
+  return FIELD_LABEL_OVERRIDES[key] ?? key.replace(/([A-Z])/g, " $1").trim();
+}
 
 const OBJECT_REPORT_META: Partial<Record<ReportKey, { title: string; note: string }>> = {
   "profit-summary": {
@@ -71,17 +115,31 @@ export default function ReportsPage() {
   const isSingleDate = SINGLE_DATE_REPORTS.includes(reportKey);
   const objectMeta = OBJECT_REPORT_META[reportKey];
 
-  async function runReport() {
+  async function fetchReport(key: ReportKey, params: Record<string, unknown>) {
     setLoading(true);
     try {
       const fn = (reportsApi as unknown as Record<string, (p: Record<string, unknown>) => Promise<{ data: unknown }>>)[
-        reportKey.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
+        key.replace(/-([a-z])/g, (_, c) => c.toUpperCase())
       ];
-      const res = await fn(paramsFor());
+      const res = await fn(params);
       setRows(res.data as typeof rows);
     } finally {
       setLoading(false);
     }
+  }
+
+  function runReport() {
+    return fetchReport(reportKey, paramsFor());
+  }
+
+  // Used by the Quick Reports tiles: jumps the report tool straight to the requested report,
+  // already run, without waiting on a state update to land first (setReportKey wouldn't be
+  // visible to paramsFor() until the next render).
+  function quickRun(key: ReportKey) {
+    setReportKey(key);
+    setFrom("");
+    setTo("");
+    return fetchReport(key, {});
   }
 
   async function exportCsv() {
@@ -104,7 +162,22 @@ export default function ReportsPage() {
         <p className="text-sm text-gray-500">Generate, view and export business reports</p>
       </div>
 
-      <Card>
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Quick Reports</h2>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {QUICK_REPORTS.map((item) =>
+            item.kind === "link" ? (
+              <Link key={item.label} to={item.to} className={quickReportClass}>{item.label}</Link>
+            ) : (
+              <button key={item.label} type="button" className={quickReportClass} onClick={() => quickRun(item.key)}>{item.label}</button>
+            )
+          )}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">All Reports (Advanced)</h2>
+        <Card>
         <div className="flex flex-wrap items-end gap-3">
           <Select label="Report" value={reportKey} onChange={(e) => { setReportKey(e.target.value as ReportKey); setRows(null); }} className="w-56">
             {REPORTS.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
@@ -115,7 +188,8 @@ export default function ReportsPage() {
           {isList && rows.length > 0 && <Button variant="secondary" onClick={exportCsv}>Export CSV</Button>}
           <Button variant="secondary" onClick={() => window.print()}>Print</Button>
         </div>
-      </Card>
+        </Card>
+      </div>
 
       {rows && !isList && (
         <Card>
@@ -123,7 +197,7 @@ export default function ReportsPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             {Object.entries(rows as Record<string, unknown>).map(([k, v]) => (
               <div key={k} className="border rounded-md p-3">
-                <p className="text-xs text-gray-500 capitalize">{k.replace(/([A-Z])/g, " $1").trim()}</p>
+                <p className="text-xs text-gray-500 capitalize">{labelFor(k)}</p>
                 <p className="font-semibold text-gray-900">
                   {k === "date" && typeof v === "string" ? formatDate(v) : typeof v === "number" ? formatMoney(v) : String(v)}
                 </p>
@@ -140,7 +214,7 @@ export default function ReportsPage() {
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="text-left text-gray-500 border-b">
-                  {columns.map((c) => <th key={c} className="py-1.5 pr-4 capitalize">{c.replace(/([A-Z])/g, " $1").trim()}</th>)}
+                  {columns.map((c) => <th key={c} className="py-1.5 pr-4 capitalize">{labelFor(c)}</th>)}
                 </tr>
               </thead>
               <tbody>

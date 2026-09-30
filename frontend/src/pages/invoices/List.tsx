@@ -36,7 +36,7 @@ export default function InvoicesList() {
           { header: "Date", render: (i) => formatDate(i.invoiceDate) },
           { header: "Customer", render: (i) => i.customerName },
           { header: "Order #", render: (i) => i.orderNumber },
-          { header: "Grand Total", render: (i) => formatMoney(i.grandTotal) },
+          { header: "Net Total", render: (i) => formatMoney(i.grandTotal) },
           { header: "Balance", render: (i) => <span className={i.balanceAmount > 0 ? "text-red-600" : ""}>{formatMoney(i.balanceAmount)}</span> },
           { header: "Status", render: (i) => <Badge value={i.paymentStatus} /> },
           { header: "", render: (i) => <Button size="sm" variant="secondary" onClick={() => navigate(`/invoices/${i.id}/print`)}>View</Button> },

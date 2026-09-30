@@ -8,7 +8,7 @@ import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import { Input, Select } from "../../components/ui/Input";
 import Badge from "../../components/ui/Badge";
-import { formatMoney, formatDate } from "../../lib/format";
+import { formatMoney, formatDate, splitWords } from "../../lib/format";
 import { errorMessage } from "../../api/client";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
 
@@ -61,7 +61,7 @@ export default function OrderDetailPage() {
     setStatusUpdating(true);
     try {
       await ordersApi.updateStatus(order.id, status);
-      toast.success(`Order moved to ${status}`);
+      toast.success(`Sale moved to ${splitWords(status)}`);
       setConfirmStatus(null);
       load();
     } catch (err) {
@@ -119,7 +119,7 @@ export default function OrderDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link to="/orders" className="text-sm text-gray-500 hover:underline">&larr; Back to Orders</Link>
+          <Link to="/orders" className="text-sm text-gray-500 hover:underline">&larr; Back to Sales</Link>
           <h1 className="text-xl font-bold text-gray-900 mt-1">{order.orderNumber}</h1>
           <p className="text-sm text-gray-500">
             <Link to={`/customers/${order.customerId}`} className="text-green-700">{order.customerName}</Link> &middot; {formatDate(order.orderDate)}
@@ -132,7 +132,7 @@ export default function OrderDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard label="Grand Total" value={formatMoney(order.grandTotal)} />
+        <StatCard label="Net Total" value={formatMoney(order.grandTotal)} />
         <StatCard label="Paid" value={formatMoney(order.paidAmount)} />
         <StatCard label="Remaining" value={formatMoney(order.remainingAmount)} />
         <StatCard label="Delivery Date" value={order.deliveryDate ? formatDate(order.deliveryDate) : "-"} />
@@ -141,7 +141,7 @@ export default function OrderDetailPage() {
       <div className="flex flex-wrap gap-2">
         {nextOptions.map((s) => (
           <Button key={s} variant={s === "Cancelled" ? "danger" : "primary"} disabled={statusUpdating} onClick={() => setConfirmStatus(s)}>
-            Mark as {s}
+            Mark as {splitWords(s)}
           </Button>
         ))}
         {invoice && (
@@ -176,13 +176,13 @@ export default function OrderDetailPage() {
           <div className="flex justify-between"><span>Subtotal</span><span>{formatMoney(order.subtotal)}</span></div>
           <div className="flex justify-between"><span>Discount</span><span>-{formatMoney(order.discount)}</span></div>
           <div className="flex justify-between"><span>Delivery Charges</span><span>{formatMoney(order.deliveryCharges)}</span></div>
-          <div className="flex justify-between font-semibold border-t pt-1"><span>Grand Total</span><span>{formatMoney(order.grandTotal)}</span></div>
+          <div className="flex justify-between font-semibold border-t pt-1"><span>Net Total</span><span>{formatMoney(order.grandTotal)}</span></div>
         </div>
       </Card>
 
       <ConfirmDialog
         open={!!confirmStatus}
-        title={`Mark order as ${confirmStatus}`}
+        title={`Mark sale as ${confirmStatus ? splitWords(confirmStatus) : ""}`}
         message={
           confirmStatus === "Confirmed"
             ? "This will deduct stock for all items and generate the customer invoice. Continue?"

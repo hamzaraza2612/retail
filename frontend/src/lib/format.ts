@@ -19,3 +19,10 @@ export function toInputDate(value?: string | null): string {
   if (!value) return "";
   return new Date(value).toISOString().slice(0, 10);
 }
+
+// Backend status enums are PascalCase with no spaces (e.g. "OutForDelivery") — fine as a
+// wire value, unreadable as displayed text. Purely a display transform: splits words apart,
+// never changes the underlying value passed back to the API.
+export function splitWords(value: string): string {
+  return value.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+}
