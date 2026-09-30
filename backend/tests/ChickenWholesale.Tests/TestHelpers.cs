@@ -114,6 +114,76 @@ public static class TestHelpers
         return product;
     }
 
+    public static async Task<Product> SeedRawMaterialAsync(ApplicationDbContext db, string sku, decimal stock = 500, decimal purchasePrice = 550)
+    {
+        var category = new ProductCategory { Name = "Raw Material " + sku };
+        db.ProductCategories.Add(category);
+        await db.SaveChangesAsync();
+
+        var product = new Product
+        {
+            SKU = sku,
+            Name = "Raw Chicken " + sku,
+            CategoryId = category.Id,
+            Unit = UnitOfMeasure.KG,
+            ProductType = ProductType.RawMaterial,
+            PurchasePrice = purchasePrice,
+            SalePrice = purchasePrice,
+            MinimumStock = 50,
+            CurrentStock = stock,
+            IsActive = true
+        };
+        db.Products.Add(product);
+        await db.SaveChangesAsync();
+
+        // Real stock always arrives via a Purchase (which always pairs a CurrentStock
+        // change with an InventoryTransaction) — this helper mirrors that instead of
+        // conjuring stock out of nowhere, so CurrentStock == sum(movements) still holds
+        // for tests that exercise the daily-stock roll-forward against seeded stock.
+        if (stock > 0)
+        {
+            db.InventoryTransactions.Add(new InventoryTransaction
+            {
+                Product = product,
+                MovementType = InventoryMovementType.PURCHASE,
+                Quantity = stock,
+                Unit = product.Unit,
+                ReferenceType = "Purchase",
+                StockAfter = stock,
+                Date = DateTime.UtcNow.AddDays(-1),
+                UserId = 1,
+                UnitCost = purchasePrice,
+                Notes = "Test seed"
+            });
+            await db.SaveChangesAsync();
+        }
+        return product;
+    }
+
+    public static async Task<Product> SeedFinishedProductAsync(ApplicationDbContext db, string sku, string name, decimal stock = 0, decimal salePrice = 750)
+    {
+        var category = new ProductCategory { Name = "Finished " + sku };
+        db.ProductCategories.Add(category);
+        await db.SaveChangesAsync();
+
+        var product = new Product
+        {
+            SKU = sku,
+            Name = name,
+            CategoryId = category.Id,
+            Unit = UnitOfMeasure.KG,
+            ProductType = ProductType.FinishedProduct,
+            PurchasePrice = 0,
+            SalePrice = salePrice,
+            MinimumStock = 10,
+            CurrentStock = stock,
+            IsActive = true
+        };
+        db.Products.Add(product);
+        await db.SaveChangesAsync();
+        return product;
+    }
+
     public static async Task<Customer> SeedCustomerAsync(ApplicationDbContext db, decimal openingBalance = 0)
     {
         var customer = new Customer

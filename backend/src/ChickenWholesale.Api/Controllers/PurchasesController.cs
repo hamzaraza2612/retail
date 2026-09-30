@@ -116,8 +116,12 @@ public class PurchasesController : ControllerBase
 
             foreach (var item in purchase.Items)
             {
+                // unitCost = the rate actually paid on THIS purchase, not the product's
+                // (possibly stale) reference PurchasePrice — more accurate for historical
+                // COGS on whatever this stock is later used for (sold directly, or
+                // consumed as processing input). See InventoryTransaction.UnitCost.
                 await _inventory.ApplyMovementAsync(item.ProductId, item.Quantity, InventoryMovementType.PURCHASE,
-                    "Purchase", purchase.Id, $"Purchase {purchase.PurchaseNumber}", allowNegative: true);
+                    "Purchase", purchase.Id, $"Purchase {purchase.PurchaseNumber}", allowNegative: true, unitCost: item.Rate);
             }
 
             await _ledger.AdjustSupplierBalanceAsync(supplier.Id, purchase.RemainingAmount);

@@ -6,7 +6,7 @@ namespace ChickenWholesale.Api.DTOs;
 public record ProductDto(
     int Id, string SKU, string Name, int CategoryId, string CategoryName, UnitOfMeasure Unit,
     decimal PurchasePrice, decimal SalePrice, decimal MinimumStock, decimal CurrentStock,
-    string? Description, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt
+    string? Description, bool IsActive, DateTime CreatedAt, DateTime UpdatedAt, ProductType ProductType
 );
 
 public record CreateProductRequest(
@@ -17,7 +17,8 @@ public record CreateProductRequest(
     [Range(0, 100_000_000)] decimal PurchasePrice,
     [Range(0, 100_000_000)] decimal SalePrice,
     [Range(0, 1_000_000)] decimal MinimumStock,
-    string? Description
+    string? Description,
+    ProductType ProductType = ProductType.FinishedProduct
 );
 
 public record UpdateProductRequest(
@@ -28,7 +29,8 @@ public record UpdateProductRequest(
     [Range(0, 100_000_000)] decimal SalePrice,
     [Range(0, 1_000_000)] decimal MinimumStock,
     string? Description,
-    bool IsActive
+    bool IsActive,
+    ProductType ProductType = ProductType.FinishedProduct
 );
 
 public record ProductCategoryDto(int Id, string Name);

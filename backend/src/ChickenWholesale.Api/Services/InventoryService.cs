@@ -37,7 +37,8 @@ public class InventoryService
         string referenceType,
         int? referenceId,
         string? notes = null,
-        bool allowNegative = false)
+        bool allowNegative = false,
+        decimal? unitCost = null)
     {
         var query = _db.Products.Where(p => p.Id == productId);
         if (!allowNegative)
@@ -70,7 +71,8 @@ public class InventoryService
             StockAfter = current.CurrentStock,
             Date = DateTime.UtcNow,
             UserId = _currentUser.UserId == 0 ? 1 : _currentUser.UserId,
-            Notes = notes
+            Notes = notes,
+            UnitCost = unitCost
         });
     }
 }

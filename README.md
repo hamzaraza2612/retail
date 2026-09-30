@@ -1,9 +1,10 @@
 # Chicken Wholesale & Supply — Business Management System
 
 A complete business management application for a chicken wholesale & supply operation:
-customers, suppliers, products, purchases, inventory, sales orders, invoices, payments,
-deliveries, employees, expenses, reports, users/roles and an audit log — all backed by a
-real relational database, not mock screens.
+customers, suppliers, products, purchases, inventory, chicken processing/cutting & yield
+costing, sales orders (cash and credit), invoices, payments, deliveries, employees,
+expenses, reports (including daily stock and daily profit/loss), users/roles and an audit
+log — all backed by a real relational database, not mock screens.
 
 ## Architecture
 
@@ -78,9 +79,13 @@ Seeded automatically on first run:
 | storekeeper  | Store@123    | Store Keeper |
 | delivery     | Delivery@123 | Delivery     |
 
-Seed data also includes 10 customers, 5 suppliers, 15 chicken products, sample purchases,
-sales orders, invoices, payments and expenses so every screen has real data to show from
-the first login.
+Seed data also includes 11 customers (10 real + the standing **Walk-in / Cash Customer**,
+code `CASH-001`, used for retail/cash sales), 5 suppliers, 17 products (16 finished + 1 raw
+material — "Raw Chicken (Whole Bird)"), sample purchases, sales orders, invoices, payments,
+expenses, and one **completed processing batch** (500KG raw chicken cut into Boneless,
+Breast, Tikka, Leg, Wings, Neck and Whole Chicken, with cost allocated by weight) so every
+screen — including Processing, the Yield report, and Daily Profit/Loss — has real data to
+show from the first login.
 
 ## Environment Variables
 
@@ -97,6 +102,18 @@ See `.env.example` for the full list. Key ones:
 | `VITE_API_URL` | Base URL the frontend calls; `/api` (default) relies on nginx proxying to the `api` container |
 
 Never commit a real `.env` file — only `.env.example` is checked in.
+
+**Deploying without `docker-compose.yml`** (e.g. a bare `docker run`, an ECS task
+definition, a Kubernetes manifest): the variable names above (`JWT_KEY`,
+`CONNECTION_STRING`, ...) are `docker-compose.yml`'s own host-side names — it is what
+translates them into the container-side names ASP.NET Core's configuration system actually
+reads (`Jwt__Key`, `ConnectionStrings__DefaultConnection`, double underscore, no
+`docker-compose.yml` equivalent elsewhere). Outside compose, set the container-side names
+directly. Getting this wrong is safe, not silent: the container-side name simply won't be
+found, so the app falls back to the placeholder in `appsettings.json`, which the same
+production-safety check refuses to start with — you'll see the "Refusing to start in
+Production..." error rather than a running container quietly signing tokens with a
+well-known key.
 
 ## Local Development (without Docker)
 
@@ -184,11 +201,21 @@ GET    /api/products/categories
 
 POST   /api/purchases                      Supplier + items → increases stock,
                                             creates payable, logs inventory movement
-GET    /api/inventory/dashboard
+GET    /api/inventory/dashboard             Raw + finished stock value, low-stock list
 GET    /api/inventory/movements
 POST   /api/inventory/adjust               Manual stock correction / waste / return
 
-POST   /api/orders                         Creates a Draft order (no stock impact yet)
+POST   /api/processing-batches             Raw material in, finished cuts out — starts
+                                            as Draft, no stock impact yet
+PUT    /api/processing-batches/{id}/status  Draft→Completed consumes raw stock, produces
+                                            finished stock, allocates cost by weight;
+                                            Completed→Cancelled reverses it exactly once
+                                            (see BUSINESS_WORKFLOW.md "Processing & Costing")
+
+POST   /api/orders                         Creates a Draft order (no stock impact yet).
+                                            Billed to the seeded "Walk-in / Cash Customer"
+                                            (code CASH-001) = a cash sale; any other
+                                            customer = a credit sale — same endpoint either way.
 PUT    /api/orders/{id}/status              Draft→Confirmed deducts stock once and
                                             generates the invoice; Cancelled restores it
 GET    /api/invoices/{id}                   Printable invoice data
@@ -205,7 +232,11 @@ GET/POST /api/expenses
 GET    /api/reports/{report-name}          daily-sales, monthly-sales, sales-by-customer,
                                             sales-by-product, purchases, receivables,
                                             payables, inventory, expenses, profit-summary,
-                                            payments, deliveries — all accept ?format=csv
+                                            payments, deliveries, processing, yield,
+                                            daily-stock, product-profit, daily-profit,
+                                            cash-vs-credit — all accept ?format=csv where
+                                            they return a list (daily-profit/cash-vs-credit
+                                            return a single summary object instead)
 
 GET/POST/PUT/DELETE /api/users             Admin only
 GET    /api/audit-logs                     Admin/Manager only
@@ -221,7 +252,7 @@ Enforced on the backend (`[Authorize(Roles = "...")]`), not just hidden in the U
 | Manager | Dashboard, Reports, Sales, Purchases, Inventory, Customers, Employees |
 | Sales | Customers, Orders, Invoices, Payments |
 | Cashier | Payments, Customers, Invoices, Expenses |
-| Store Keeper | Inventory, Purchases, Stock Adjustments, Suppliers |
+| Store Keeper | Inventory, Purchases, Processing/Cutting, Stock Adjustments, Suppliers |
 | Delivery | Assigned deliveries and delivery status updates |
 
 ## Backup & Restore (PostgreSQL)
@@ -241,12 +272,17 @@ or restore into a fresh database as shown below) — `psql` will otherwise emit 
 errors partway through and leave the target in a mixed state.
 
 **These exact commands were run against this project's own seeded data** as part of
-production-readiness verification: `pg_dump` produced a ~50KB SQL file, it was restored into
-a separate `restore_test_db` database on the same Postgres instance, and every table's row
+production-readiness verification, most recently during the business UAT pass covering the
+processing/cutting feature: `pg_dump` produced an ~85KB SQL file, it was restored into a
+separate `restore_test_db` database on the same Postgres instance, and every table's row
 count (`Users`, `Customers`, `Suppliers`, `Products`, `Purchases`, `SalesOrders`, `Invoices`,
-`Payments`, `Employees`, `Expenses`, `AuditLogs`) plus a spot-check of actual row content
-(customer balances, a user's bcrypt password hash) matched the source database exactly
-before the test database was dropped. No manual data-fixing was required.
+`Payments`, `Employees`, `Expenses`, `AuditLogs`, `InventoryTransactions`,
+`ProcessingBatches`, `ProcessingInputs`, `ProcessingOutputs`) plus a spot-check of actual row
+content (customer balances, a user's bcrypt password hash) matched the source database
+exactly. A temporary API container was then started with its connection string pointed at
+the restored database and a production-strength `JWT_KEY`, and login, products, customers,
+inventory movements, orders, and reports were all confirmed to serve correct data from it
+before the test container and database were removed. No manual data-fixing was required.
 
 For anything beyond ad-hoc local backups, schedule `pg_dump` via cron and store the output
 off-host.
@@ -289,6 +325,28 @@ off-host.
 
 - "Estimated Gross Profit" uses recorded purchase price as COGS — it is an estimate, not a
   reconciled accounting figure, and is labelled as such in the UI.
+- **Processing costing is weight-based, not a full manufacturing cost system**: it does not
+  implement FIFO/weighted-average raw material costing, and every output of a batch is
+  costed at the same per-KG rate regardless of cut. See BUSINESS_WORKFLOW.md "Processing /
+  Cutting & Costing" for the exact formula and what it deliberately does not claim. A direct
+  consequence: a raw material's cost basis at processing time is its `Product.PurchasePrice`
+  field, which purchases never auto-update — if the market rate changes, a store keeper must
+  manually update that price on the Products screen before completing the next batch, or it
+  will be costed at the old rate.
+- **A completed processing batch can only be cancelled before any of its output has been
+  sold.** Finished stock is a single pool per product with no per-batch/lot tracking, so once
+  any sale of a product happens after a batch produced some of it, that batch (and any other
+  batch that also produced that product) can no longer be cancelled — there is no reliable
+  way to prove which batch's units were sold. This is intentionally conservative (a UAT run
+  caught the looser, pre-fix version of this check silently allowing exactly this).
+- **Historical cost snapshots** (`InventoryTransaction.UnitCost`) only exist for movements
+  recorded after this feature shipped — sales made before it show Rs. 0 estimated cost in
+  the Product Profit and Daily Profit/Loss reports specifically (all other figures,
+  including the pre-existing "Estimated Gross Profit", are unaffected).
+- No day-end financial "close/lock" — the brief for this feature explicitly allowed
+  skipping it in favor of prioritizing data integrity, so all reports are always read-only,
+  always-current views over the underlying ledger rather than a snapshot that could drift
+  out of sync with it.
 - No WhatsApp/SMS integration, no payroll module, no route optimization — these are
   explicitly out of scope for the MVP (see the task brief's P2 list).
 - Human-readable sequential codes (`CUST-2026-00010`, `PO-2026-00004`, ...) are generated

@@ -15,6 +15,7 @@ public class Product
     public int CategoryId { get; set; }
     public ProductCategory? Category { get; set; }
     public UnitOfMeasure Unit { get; set; }
+    public ProductType ProductType { get; set; } = ProductType.FinishedProduct;
     public decimal PurchasePrice { get; set; }
     public decimal SalePrice { get; set; }
     public decimal MinimumStock { get; set; }

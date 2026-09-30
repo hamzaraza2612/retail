@@ -1,6 +1,7 @@
 using System.Text;
 using ChickenWholesale.Api.Data;
 using ChickenWholesale.Api.Data.Seed;
+using ChickenWholesale.Api.Infrastructure;
 using ChickenWholesale.Api.Middleware;
 using ChickenWholesale.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -36,9 +37,20 @@ if (builder.Environment.IsProduction() &&
 }
 
 // ---------------- Services ----------------
-builder.Services.AddControllers().AddJsonOptions(opts =>
+// Every DateTime column is Postgres "timestamp with time zone" and every DateTime the app
+// produces is UTC (DateTime.UtcNow) — but a bare date string from a query parameter or a
+// JSON body ("2026-09-19") parses to DateTimeKind.Unspecified by default, which Npgsql
+// refuses to write to a timestamptz column. These two registrations normalize every
+// DateTime/DateTime? entering the app (whether via ?from=..., a route value, or a request
+// body field) to UTC at the boundary, instead of special-casing it in every controller.
+builder.Services.AddControllers(options =>
+{
+    options.ModelBinderProviders.Insert(0, new UtcDateTimeModelBinderProvider());
+}).AddJsonOptions(opts =>
 {
     opts.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    opts.JsonSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
+    opts.JsonSerializerOptions.Converters.Add(new UtcNullableDateTimeJsonConverter());
 });
 
 builder.Services.AddEndpointsApiExplorer();

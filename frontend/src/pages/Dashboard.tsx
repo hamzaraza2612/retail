@@ -39,6 +39,24 @@ export default function Dashboard() {
         <StatCard label="Est. Gross Profit" value={formatMoney(cards.estimatedGrossProfitThisMonth)} sub="This month (estimate)" />
       </div>
 
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">Today's Processing &amp; Profit/Loss</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard label="Cash Sales" value={formatMoney(cards.todayCashSales)} sub="Walk-in / cash customer" />
+          <StatCard label="Credit Sales" value={formatMoney(cards.todayCreditSales)} sub="Hotels, restaurants, etc." />
+          <StatCard label="Est. Gross Profit (Today)" value={formatMoney(cards.todayEstimatedGrossProfit)} sub="Sales - estimated COGS" />
+          <StatCard
+            label="Operating Profit/Loss"
+            value={<span className={cards.todayOperatingProfitLoss < 0 ? "text-red-600" : ""}>{formatMoney(cards.todayOperatingProfitLoss)}</span>}
+            sub="Gross profit - expenses"
+          />
+          <StatCard label="Processing Batches" value={cards.todayProcessingBatches} sub="Completed today" />
+          <StatCard label="Raw Material Processed" value={`${cards.todayRawMaterialProcessed} KG`} sub="Today" />
+          <StatCard label="Produced Quantity" value={`${cards.todayProducedQuantity} KG`} sub="Finished output today" />
+          <StatCard label="Raw / Finished Stock" value={`${formatMoney(cards.rawStockValue)} / ${formatMoney(cards.finishedStockValue)}`} sub="Stock value by type" />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2">
           <h3 className="font-semibold text-gray-800 mb-3">Sales — Last 7 Days</h3>

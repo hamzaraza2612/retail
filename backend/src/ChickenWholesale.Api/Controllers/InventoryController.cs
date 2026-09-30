@@ -36,13 +36,19 @@ public class InventoryController : ControllerBase
         var products = await _db.Products.Include(p => p.Category).Where(p => p.IsActive).ToListAsync();
         var lowStock = products.Where(p => p.CurrentStock <= p.MinimumStock).ToList();
         var stockValue = products.Sum(p => p.CurrentStock * p.PurchasePrice);
+        var rawProducts = products.Where(p => p.ProductType == ProductType.RawMaterial).ToList();
+        var finishedProducts = products.Where(p => p.ProductType == ProductType.FinishedProduct).ToList();
 
         return Ok(new InventoryDashboardDto(
             products.Count,
             lowStock.Count,
             stockValue,
             lowStock.Select(p => new ProductDto(p.Id, p.SKU, p.Name, p.CategoryId, p.Category?.Name ?? "", p.Unit,
-                p.PurchasePrice, p.SalePrice, p.MinimumStock, p.CurrentStock, p.Description, p.IsActive, p.CreatedAt, p.UpdatedAt)).ToList()
+                p.PurchasePrice, p.SalePrice, p.MinimumStock, p.CurrentStock, p.Description, p.IsActive, p.CreatedAt, p.UpdatedAt, p.ProductType)).ToList(),
+            rawProducts.Sum(p => p.CurrentStock * p.PurchasePrice),
+            finishedProducts.Sum(p => p.CurrentStock * p.PurchasePrice),
+            rawProducts.Count,
+            finishedProducts.Count
         ));
     }
 

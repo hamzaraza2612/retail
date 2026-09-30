@@ -367,6 +367,58 @@ public class BusinessLogicTests
         Assert.Equal(100, await TestHelpers.FreshStock(db, product.Id));
     }
 
+    /// <summary>
+    /// UAT-discovered blocker: cancelling a Confirmed order correctly restores stock and
+    /// adjusts the customer's running balance (see the test above), but was leaving the
+    /// Invoice created at Confirm time completely untouched — a live UAT run caught it
+    /// still showing its original GrandTotal/BalanceAmount as an outstanding receivable
+    /// after the order (and the sale it billed) had been cancelled, even though the
+    /// customer's own CurrentBalance no longer included it. That "ghost invoice" would
+    /// keep showing up in an Invoices list or receivables report as money owed for a sale
+    /// that no longer exists. Fixed by zeroing the invoice's financial fields and marking
+    /// it Paid (rather than deleting it, so the invoice number and audit trail survive)
+    /// whenever the order that generated it is cancelled.
+    /// </summary>
+    [Fact]
+    public async Task CancelConfirmedOrder_AlsoZeroesTheOrphanedInvoice()
+    {
+        var db = TestHelpers.CreateDb();
+        var product = await TestHelpers.SeedProductAsync(db, stock: 100);
+        var customer = await TestHelpers.SeedCustomerAsync(db);
+        var currentUser = TestHelpers.CreateCurrentUser();
+
+        var controller = new SalesOrdersController(db, new AuditService(db, currentUser), new CodeGeneratorService(db),
+            new InventoryService(db, currentUser), new LedgerService(db), currentUser);
+
+        var createResult = await controller.Create(new CreateSalesOrderRequest(
+            customer.Id, null, null, new List<SalesOrderItemRequest> { new(product.Id, 20, 750) }, 0, 0, 0, null));
+        var order = Assert.IsType<SalesOrderDto>(Assert.IsType<OkObjectResult>(createResult.Result).Value);
+
+        await controller.UpdateStatus(order.Id, new UpdateOrderStatusRequest(SalesOrderStatus.Confirmed));
+        var updatedCustomer = await TestHelpers.FreshCustomer(db, customer.Id);
+        Assert.Equal(15000m, updatedCustomer.CurrentBalance); // 20 * 750, unpaid credit sale
+
+        await controller.UpdateStatus(order.Id, new UpdateOrderStatusRequest(SalesOrderStatus.Cancelled));
+
+        // Customer balance is correctly back to zero...
+        updatedCustomer = await TestHelpers.FreshCustomer(db, customer.Id);
+        Assert.Equal(0m, updatedCustomer.CurrentBalance);
+
+        // ...and the invoice this order generated must no longer show a receivable either.
+        var invoice = await db.Invoices.AsNoTracking().FirstAsync(i => i.SalesOrderId == order.Id);
+        Assert.Equal(0m, invoice.GrandTotal);
+        Assert.Equal(0m, invoice.BalanceAmount);
+        Assert.Equal(PaymentStatus.Paid, invoice.PaymentStatus);
+
+        // ...and the order itself, which the Orders list/detail screens read directly, must
+        // not still display a red "still owed" remaining amount contradicting its own
+        // Cancelled status.
+        var reloadedOrder = await controller.GetById(order.Id);
+        var reloadedDto = Assert.IsType<SalesOrderDto>(Assert.IsType<OkObjectResult>(reloadedOrder.Result).Value);
+        Assert.Equal(0m, reloadedDto.RemainingAmount);
+        Assert.Equal(PaymentStatus.Paid, reloadedDto.PaymentStatus);
+    }
+
     // ---------- Invalid transition is rejected even when reachable via direct API call ----------
     [Fact]
     public async Task UpdateStatus_RejectsSkippingConfirmedStraightToDelivered()

@@ -2,7 +2,7 @@ import { api } from "./client";
 import type {
   AuditLog, Customer, CustomerDetail, Delivery, DashboardData, Employee, Expense, ExpenseCategory,
   Invoice, InventoryDashboard, InventoryMovement, PagedResult, Payment, Product, ProductCategory,
-  Purchase, SalesOrder, Supplier, SupplierPayment, User,
+  ProcessingBatch, Purchase, SalesOrder, Supplier, SupplierPayment, User,
 } from "./types";
 
 // ---------- Auth ----------
@@ -64,6 +64,14 @@ export const purchasesApi = {
   list: (params: Record<string, unknown>) => api.get<PagedResult<Purchase>>("/purchases", { params }),
   get: (id: number) => api.get<Purchase>(`/purchases/${id}`),
   create: (data: unknown) => api.post<Purchase>("/purchases", data),
+};
+
+// ---------- Processing / Cutting ----------
+export const processingBatchesApi = {
+  list: (params: Record<string, unknown>) => api.get<PagedResult<ProcessingBatch>>("/processing-batches", { params }),
+  get: (id: number) => api.get<ProcessingBatch>(`/processing-batches/${id}`),
+  create: (data: unknown) => api.post<ProcessingBatch>("/processing-batches", data),
+  updateStatus: (id: number, status: string) => api.put<ProcessingBatch>(`/processing-batches/${id}/status`, { status }),
 };
 
 // ---------- Inventory ----------
@@ -140,6 +148,12 @@ export const reportsApi = {
   profitSummary: (params: Record<string, unknown>) => api.get("/reports/profit-summary", { params }),
   payments: (params: Record<string, unknown>) => api.get("/reports/payments", { params }),
   deliveries: (params: Record<string, unknown>) => api.get("/reports/deliveries", { params }),
+  processing: (params: Record<string, unknown>) => api.get("/reports/processing", { params }),
+  yield: (params: Record<string, unknown>) => api.get("/reports/yield", { params }),
+  dailyStock: (params: Record<string, unknown>) => api.get("/reports/daily-stock", { params }),
+  productProfit: (params: Record<string, unknown>) => api.get("/reports/product-profit", { params }),
+  dailyProfit: (params: Record<string, unknown>) => api.get("/reports/daily-profit", { params }),
+  cashVsCredit: (params: Record<string, unknown>) => api.get("/reports/cash-vs-credit", { params }),
 };
 
 // ---------- Audit Logs ----------
