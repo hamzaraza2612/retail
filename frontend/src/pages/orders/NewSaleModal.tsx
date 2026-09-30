@@ -41,9 +41,14 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
+  /** Launch straight into this mode instead of defaulting to Cash — e.g. a "New Sale"
+   * shortcut from a specific customer's own page always means a credit sale to them. */
+  initialMode?: SaleMode;
+  /** Pre-select this customer (only meaningful together with initialMode="CREDIT"). */
+  presetCustomerId?: number;
 }
 
-export default function NewSaleModal({ open, onClose, onSaved }: Props) {
+export default function NewSaleModal({ open, onClose, onSaved, initialMode, presetCustomerId }: Props) {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -78,8 +83,8 @@ export default function NewSaleModal({ open, onClose, onSaved }: Props) {
   }, [mode, netTotal, paidTouched]);
 
   function resetForm() {
-    setMode("CASH");
-    setCustomerId(0);
+    setMode(initialMode ?? "CASH");
+    setCustomerId(initialMode === "CREDIT" ? presetCustomerId ?? 0 : 0);
     setItems([emptyLine(0, 0)]);
     setDiscount(0);
     setPaidAmount(0);
