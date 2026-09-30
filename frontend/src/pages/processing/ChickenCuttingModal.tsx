@@ -158,7 +158,7 @@ export default function ChickenCuttingModal({ open, onClose, onSaved }: Props) {
         <form onSubmit={handleSubmit}>
           <div>
             <p className="text-sm font-medium text-gray-700 mb-1">Step 1 · Raw Chicken</p>
-            <div className="grid grid-cols-2 gap-x-4 items-end bg-gray-50 border border-gray-200 rounded-md p-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 sm:items-end bg-gray-50 border border-gray-200 rounded-md p-3">
               <div>
                 <p className="text-xs text-gray-500">Raw Chicken Available</p>
                 <p className="font-semibold text-gray-900">{rawMaterial ? `${rawMaterial.currentStock} ${rawMaterial.unit}` : "-"}</p>
@@ -194,7 +194,7 @@ export default function ChickenCuttingModal({ open, onClose, onSaved }: Props) {
             />
           </div>
 
-          <div className={`mt-4 rounded-md border p-3 text-sm grid grid-cols-5 gap-2 ${balanced ? "border-green-300 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
+          <div className={`mt-4 rounded-md border p-3 text-sm grid grid-cols-2 sm:grid-cols-5 gap-2 ${balanced ? "border-green-300 bg-green-50" : "border-amber-300 bg-amber-50"}`}>
             <div><p className="text-xs text-gray-500">Raw Input</p><p className="font-semibold">{inputQuantity} KG</p></div>
             <div><p className="text-xs text-gray-500">Finished Output</p><p className="font-semibold">{finishedOutput} KG</p></div>
             <div><p className="text-xs text-gray-500">Waste</p><p className="font-semibold">{wasteQuantity} KG</p></div>
@@ -210,7 +210,7 @@ export default function ChickenCuttingModal({ open, onClose, onSaved }: Props) {
             </p>
           )}
 
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="flex justify-end gap-2 mt-4 sticky bottom-0 -mx-5 px-5 py-3 bg-white border-t">
             <Button type="button" variant="secondary" onClick={handleClose} disabled={saving}>Cancel</Button>
             <Button type="submit" disabled={saving || !canComplete}>{saving ? "Completing…" : "COMPLETE CUTTING"}</Button>
           </div>

@@ -54,7 +54,7 @@ export default function CustomerDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link to="/customers" className="text-sm text-gray-500 hover:underline">&larr; Back to Customers</Link>
+          <Link to="/customers" className="text-sm text-gray-500 hover:underline inline-block py-1 -my-1">&larr; Back to Customers</Link>
           <h1 className="text-xl font-bold text-gray-900 mt-1">{customer.businessName}</h1>
           <p className="text-sm text-gray-500">{customer.customerCode} &middot; {customer.customerType} &middot; {customer.phone}</p>
         </div>
@@ -75,7 +75,7 @@ export default function CustomerDetailPage() {
 
       <Card>
         <h3 className="font-semibold text-gray-800 mb-3">Ledger Summary</h3>
-        <div className="space-y-1.5 text-sm max-w-xs">
+        <div className="space-y-1.5 text-sm w-full sm:max-w-xs">
           <div className="flex justify-between"><span className="text-gray-600">Opening Due</span><span className="font-medium">{formatMoney(statement?.openingBalance)}</span></div>
           <div className="flex justify-between"><span className="text-gray-600">+ Credit Sales</span><span className="font-medium">{formatMoney(creditSalesTotal)}</span></div>
           <div className="flex justify-between"><span className="text-gray-600">&minus; Payments Received</span><span className="font-medium text-green-700">{formatMoney(paymentsReceivedTotal)}</span></div>

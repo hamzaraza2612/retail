@@ -110,7 +110,7 @@ export default function Layout() {
         </div>
         <button
           type="button"
-          className="md:hidden text-gray-400 hover:text-white"
+          className="md:hidden text-gray-400 hover:text-white p-2 -m-2"
           onClick={() => setMobileOpen(false)}
           aria-label="Close menu"
         >
@@ -153,7 +153,7 @@ export default function Layout() {
       <div className="p-4 border-t border-gray-800 text-xs text-gray-400">
         <p className="text-gray-200 font-medium">{user?.fullName}</p>
         <p>{user?.role}</p>
-        <button onClick={logout} className="mt-2 text-red-400 hover:text-red-300">
+        <button onClick={logout} className="mt-2 py-1 -my-1 text-red-400 hover:text-red-300">
           Sign out
         </button>
       </div>
@@ -164,7 +164,7 @@ export default function Layout() {
     <div className="flex h-screen bg-gray-100">
       {/* Mobile top bar: hamburger + brand, only shown below md */}
       <div className="md:hidden fixed top-0 inset-x-0 z-30 flex items-center justify-between bg-gray-900 text-white px-4 py-3">
-        <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" className="text-gray-200">
+        <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open menu" className="text-gray-200 p-2 -m-2">
           <HamburgerIcon />
         </button>
         <span className="text-sm font-semibold">Chicken Wholesale</span>
@@ -185,7 +185,7 @@ export default function Layout() {
       </aside>
 
       <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
-        <div className="p-6 max-w-[1400px] mx-auto">
+        <div className="p-4 sm:p-6 max-w-[1400px] mx-auto">
           <Outlet />
         </div>
       </main>

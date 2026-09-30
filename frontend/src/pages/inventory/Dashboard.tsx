@@ -28,12 +28,12 @@ export default function StockPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Stock</h1>
           <p className="text-sm text-gray-500">What's on hand right now</p>
         </div>
-        <Link to="/inventory/history" className="text-sm text-green-700 hover:underline">Stock Adjustments &amp; History &rarr;</Link>
+        <Link to="/inventory/history" className="text-sm text-green-700 hover:underline inline-block py-1 -my-1">Stock Adjustments &amp; History &rarr;</Link>
       </div>
 
       <Card>

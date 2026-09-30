@@ -254,10 +254,10 @@ export default function NewSaleModal({ open, onClose, onSaved, initialMode, pres
               const overridden = !!product && it.rate !== product.salePrice;
               return (
                 <div key={i}>
-                  <div className="grid grid-cols-12 gap-2 items-center">
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:items-center">
                     <select
                       aria-label="Product"
-                      className="col-span-5 border border-gray-300 rounded-md px-2 py-1.5 text-sm"
+                      className="sm:col-span-5 border border-gray-300 rounded-md px-2 py-1.5 text-sm"
                       value={it.productId}
                       onChange={(e) => {
                         const p = products.find((pr) => pr.id === Number(e.target.value));
@@ -266,20 +266,28 @@ export default function NewSaleModal({ open, onClose, onSaved, initialMode, pres
                     >
                       {products.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.unit}) — stock {p.currentStock}</option>)}
                     </select>
-                    <input
-                      aria-label="Quantity"
-                      type="number" step="0.01" placeholder={`Qty ${product?.unit ?? ""}`}
-                      className="col-span-2 border border-gray-300 rounded-md px-2 py-1.5 text-sm"
-                      value={it.quantity || ""} onChange={(e) => updateItem(i, { quantity: Number(e.target.value) })}
-                    />
-                    <input
-                      aria-label="Rate"
-                      type="number" step="0.01" placeholder="Rate"
-                      className="col-span-2 border border-gray-300 rounded-md px-2 py-1.5 text-sm"
-                      value={it.rate || ""} onChange={(e) => updateItem(i, { rate: Number(e.target.value) })}
-                    />
-                    <span className="col-span-2 text-sm text-gray-700 font-medium">{formatMoney(it.quantity * it.rate)}</span>
-                    <button type="button" aria-label="Remove product" className="col-span-1 text-red-500 text-sm" onClick={() => removeItem(i)} disabled={items.length === 1}>&times;</button>
+                    <div className="grid grid-cols-3 sm:contents gap-2">
+                      <input
+                        aria-label="Quantity"
+                        type="number" step="0.01" placeholder={`Qty ${product?.unit ?? ""}`}
+                        className="sm:col-span-2 border border-gray-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0"
+                        value={it.quantity || ""} onChange={(e) => updateItem(i, { quantity: Number(e.target.value) })}
+                      />
+                      <input
+                        aria-label="Rate"
+                        type="number" step="0.01" placeholder="Rate"
+                        className="sm:col-span-2 border border-gray-300 rounded-md px-2 py-1.5 text-sm w-full min-w-0"
+                        value={it.rate || ""} onChange={(e) => updateItem(i, { rate: Number(e.target.value) })}
+                      />
+                      <span className="sm:col-span-2 text-sm text-gray-700 font-medium flex items-center justify-end sm:justify-start">{formatMoney(it.quantity * it.rate)}</span>
+                    </div>
+                    <button
+                      type="button" aria-label="Remove product"
+                      className="sm:col-span-1 text-red-500 text-sm p-2 -my-2 justify-self-end sm:justify-self-auto"
+                      onClick={() => removeItem(i)} disabled={items.length === 1}
+                    >
+                      &times; Remove
+                    </button>
                   </div>
                   {product && product.currentStock < it.quantity && (
                     <p className="text-xs text-amber-600 mt-0.5">Only {product.currentStock} {product.unit} in stock — this will be rejected if it exceeds what's on hand when saved.</p>
@@ -291,9 +299,9 @@ export default function NewSaleModal({ open, onClose, onSaved, initialMode, pres
               );
             })}
           </div>
-          <button type="button" className="text-sm text-green-700 mt-2" onClick={addItem}>+ Add product</button>
+          <button type="button" className="text-sm text-green-700 mt-2 py-1" onClick={addItem}>+ Add product</button>
 
-          <div className="mt-4 border-t pt-3 space-y-1 text-sm max-w-sm ml-auto">
+          <div className="mt-4 border-t pt-3 space-y-1 text-sm w-full sm:max-w-sm sm:ml-auto">
             <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span className="font-medium">{formatMoney(subtotal)}</span></div>
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Discount (Rs.)</span>
@@ -313,7 +321,7 @@ export default function NewSaleModal({ open, onClose, onSaved, initialMode, pres
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="flex justify-end gap-2 mt-4 sticky bottom-0 -mx-5 px-5 py-3 bg-white border-t">
             <Button type="button" variant="secondary" onClick={handleClose} disabled={saving}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : "SAVE SALE"}</Button>
           </div>

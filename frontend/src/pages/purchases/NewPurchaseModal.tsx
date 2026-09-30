@@ -177,7 +177,7 @@ export default function NewPurchaseModal({ open, onClose, onSaved }: Props) {
         </div>
       ) : (
         <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-x-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
             <Select label="Supplier" aria-label="Supplier" required value={supplierId} onChange={(e) => setSupplierId(Number(e.target.value))}>
               <option value={0}>Select supplier…</option>
               {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -207,7 +207,7 @@ export default function NewPurchaseModal({ open, onClose, onSaved }: Props) {
           </Select>
           {product && <p className="text-xs text-gray-400 mt-0.5">Current stock: {product.currentStock} {product.unit}</p>}
 
-          <div className="grid grid-cols-2 gap-x-4 mt-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 mt-3">
             <Input
               label={`Quantity ${product?.unit ? `(${product.unit})` : ""}`} aria-label="Quantity" type="number" step="0.001" required
               value={quantity || ""} onChange={(e) => setQuantity(Number(e.target.value))}
@@ -228,7 +228,7 @@ export default function NewPurchaseModal({ open, onClose, onSaved }: Props) {
             <span className="font-semibold text-gray-900">{formatMoney(total)}</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-x-4 mt-3 items-start">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 mt-3 items-start">
             <Select label="Payment Status" aria-label="Payment Status" value={paymentStatus} onChange={(e) => setPaymentStatus(e.target.value as PaymentStatus)}>
               <option value="Unpaid">Unpaid</option>
               <option value="Partial">Partially Paid</option>
@@ -249,7 +249,7 @@ export default function NewPurchaseModal({ open, onClose, onSaved }: Props) {
 
           <Input label="Notes (optional)" className="mt-3" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="e.g. delivered by driver, weighed at shop" />
 
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="flex justify-end gap-2 mt-4 sticky bottom-0 -mx-5 px-5 py-3 bg-white border-t">
             <Button type="button" variant="secondary" onClick={handleClose} disabled={saving}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save Purchase"}</Button>
           </div>

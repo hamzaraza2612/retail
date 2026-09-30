@@ -181,7 +181,7 @@ export default function ReceivePaymentModal({ open, onClose, onSaved, customerId
             value={referenceNote} onChange={(e) => setReferenceNote(e.target.value)} placeholder="Cheque #, transaction ID, or a short note"
           />
 
-          <div className="mt-4 border-t pt-3 space-y-1 text-sm max-w-xs ml-auto">
+          <div className="mt-4 border-t pt-3 space-y-1 text-sm w-full sm:max-w-xs sm:ml-auto">
             <div className="flex justify-between"><span className="text-gray-600">Outstanding Before</span><span className="font-medium">{formatMoney(outstandingBefore)}</span></div>
             <div className="flex justify-between"><span className="text-gray-600">Payment</span><span className="font-medium text-green-700">− {formatMoney(amount)}</span></div>
             <div className="flex justify-between font-semibold text-base border-t pt-1">
@@ -190,7 +190,7 @@ export default function ReceivePaymentModal({ open, onClose, onSaved, customerId
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 mt-4">
+          <div className="flex justify-end gap-2 mt-4 sticky bottom-0 -mx-5 px-5 py-3 bg-white border-t">
             <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
             <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Receive Payment"}</Button>
           </div>
