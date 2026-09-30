@@ -14,6 +14,7 @@ import PurchasesList from "./pages/purchases/List";
 import ProcessingBatchesList from "./pages/processing/List";
 import ProcessingBatchDetailPage from "./pages/processing/Detail";
 import InventoryDashboardPage from "./pages/inventory/Dashboard";
+import InventoryHistoryPage from "./pages/inventory/History";
 import OrdersList from "./pages/orders/List";
 import OrderDetailPage from "./pages/orders/Detail";
 import InvoicesList from "./pages/invoices/List";
@@ -46,6 +47,7 @@ export default function App() {
             <Route path="/processing" element={<ProcessingBatchesList />} />
             <Route path="/processing/:id" element={<ProcessingBatchDetailPage />} />
             <Route path="/inventory" element={<InventoryDashboardPage />} />
+            <Route path="/inventory/history" element={<InventoryHistoryPage />} />
             <Route path="/orders" element={<OrdersList />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/invoices" element={<InvoicesList />} />

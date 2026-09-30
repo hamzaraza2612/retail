@@ -30,6 +30,7 @@ const PRIMARY_NAV: NavItem[] = [
 // Everything used for setup or occasional/admin work, tucked away but never removed —
 // same routes, same role restrictions as the original nav.
 const MORE_NAV: NavItem[] = [
+  { to: "/inventory/history", label: "Stock Adjustments & History" },
   { to: "/suppliers", label: "Suppliers", roles: ["Admin", "Manager", "StoreKeeper"] },
   { to: "/invoices", label: "Invoices" },
   { to: "/supplier-payments", label: "Supplier Payments", roles: ["Admin", "Manager", "StoreKeeper", "Cashier"] },
