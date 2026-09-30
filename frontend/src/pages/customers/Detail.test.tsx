@@ -152,7 +152,9 @@ describe("CustomerDetailPage — navigation shortcuts", () => {
   });
 
   it("Customer -> Receive Payment records a payment against this customer", async () => {
-    (paymentsApi.create as ReturnType<typeof vi.fn>).mockResolvedValue({ data: {} });
+    (paymentsApi.create as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { id: 1, paymentNumber: "PAY-2026-00001", customerId: hotelCustomer.id, customerName: hotelCustomer.businessName, amount: 8000 },
+    });
     renderDetail();
     await screen.findByText("Restaurant XYZ");
 
@@ -169,8 +171,11 @@ describe("CustomerDetailPage — navigation shortcuts", () => {
     await waitFor(() => {
       expect(paymentsApi.create).toHaveBeenCalledWith(expect.objectContaining({ customerId: hotelCustomer.id, amount: 8000 }));
     });
-    // The page's own data is refreshed after a successful payment.
-    expect(customersApi.get).toHaveBeenCalledTimes(2);
+    await screen.findByText("Remaining Due");
+    // customersApi.get is called 3 times in total: the page's initial load, the modal's own
+    // refresh of the authoritative balance for its success screen, and the page reloading
+    // itself again via onSaved.
+    expect(customersApi.get).toHaveBeenCalledTimes(3);
   });
 
   it("hides New Sale and Receive Payment for a role that cannot perform them", async () => {
