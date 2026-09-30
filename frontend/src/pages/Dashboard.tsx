@@ -79,7 +79,7 @@ export default function Dashboard() {
         <StatCard label="Today's Sales" value={formatMoney(cards.todaySales)} />
         <StatCard label="Cash Received" value={formatMoney(cards.todayCashSales)} sub="Walk-in / cash customer" />
         <StatCard label="Credit Sales" value={formatMoney(cards.todayCreditSales)} sub="Hotels, restaurants, etc." />
-        <StatCard label="Customer Outstanding" value={formatMoney(cards.totalReceivables)} sub="Owed by customers" />
+        <StatCard label="Customer Due" value={formatMoney(cards.totalReceivables)} sub="Owed by customers" />
         <StatCard label="Today's Expenses" value={formatMoney(cards.todayExpenses)} />
         <StatCard label="Raw Chicken Stock" value={`${rawStockTotal} ${rawUnit}`} sub="On hand now" />
         <StatCard label="Finished Product Stock" value={`${finishedStockTotal} ${finishedUnit}`} sub="On hand now" />

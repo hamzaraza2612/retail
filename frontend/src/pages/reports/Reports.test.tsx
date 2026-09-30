@@ -29,7 +29,7 @@ describe("ReportsPage (prioritized landing page)", () => {
     const tiles = Array.from(container.querySelectorAll("button, a")).map((el) => el.textContent);
 
     expect(tiles).toEqual([
-      "Today's Business", "Stock", "Customer Outstanding", "Product Profit", "Processing/Yield",
+      "Today's Business", "Stock", "Customer Due", "Product Profit", "Processing/Yield",
       "Cash vs Credit", "Sales", "Purchases", "Expenses",
     ]);
   });
@@ -40,14 +40,14 @@ describe("ReportsPage (prioritized landing page)", () => {
     expect(screen.getByRole("link", { name: "Stock" })).toHaveAttribute("href", "/inventory");
   });
 
-  it("running the Customer Outstanding quick report calls the receivables report and shows results immediately", async () => {
+  it("running the Customer Due quick report calls the receivables report and shows results immediately", async () => {
     const user = userEvent.setup();
     vi.mocked(reportsApi.receivables).mockResolvedValue({
       data: [{ customerCode: "CUST-1", businessName: "Hotel X", phone: "0300", creditLimit: 100000, outstandingBalance: 5000 }],
     } as any);
 
     renderPage();
-    await user.click(screen.getByRole("button", { name: "Customer Outstanding" }));
+    await user.click(screen.getByRole("button", { name: "Customer Due" }));
 
     await waitFor(() => expect(reportsApi.receivables).toHaveBeenCalled());
     expect(await screen.findByText("Hotel X")).toBeInTheDocument();

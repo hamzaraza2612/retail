@@ -25,7 +25,7 @@ export default function PaymentsList() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Customer Payments</h1>
+          <h1 className="text-xl font-bold text-gray-900">Payments</h1>
           <p className="text-sm text-gray-500">Payments received against invoices and accounts</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>+ Receive Payment</Button>

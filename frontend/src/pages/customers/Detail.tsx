@@ -63,7 +63,7 @@ export default function CustomerDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard label="Total Sales" value={formatMoney(detail.totalPurchases)} />
         <StatCard label="Total Paid" value={formatMoney(detail.totalPaid)} />
-        <StatCard label="Outstanding" value={<span className={customer.currentBalance > 0 ? "text-red-600" : ""}>{formatMoney(customer.currentBalance)}</span>} />
+        <StatCard label="Amount Due" value={<span className={customer.currentBalance > 0 ? "text-red-600" : ""}>{formatMoney(customer.currentBalance)}</span>} />
         <StatCard label="Last Sale" value={detail.lastOrderDate ? formatDate(detail.lastOrderDate) : "-"} sub={`${detail.totalOrders} sale${detail.totalOrders === 1 ? "" : "s"} total`} />
       </div>
 

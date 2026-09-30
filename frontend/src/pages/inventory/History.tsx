@@ -8,7 +8,7 @@ import Table from "../../components/ui/Table";
 import Button from "../../components/ui/Button";
 import Modal from "../../components/ui/Modal";
 import { Input, Select, TextArea } from "../../components/ui/Input";
-import { formatMoney, formatDateTime } from "../../lib/format";
+import { formatMoney, formatDateTime, splitWords } from "../../lib/format";
 import { errorMessage } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 
@@ -19,6 +19,30 @@ const ADJUSTMENT_TYPES: { value: InventoryMovementType; label: string }[] = [
   { value: "RETURN_IN", label: "Return In (from customer)" },
   { value: "RETURN_OUT", label: "Return Out (to supplier)" },
 ];
+
+// The movement ledger is generated from backend enum/reference values not meant for display
+// (e.g. "ADJUSTMENT_OUT", "ProcessingBatchCancel") — these two maps are a display-only
+// translation to plain wording for whoever reads this history; the stored values themselves
+// are untouched.
+const MOVEMENT_TYPE_LABEL: Record<string, string> = {
+  PURCHASE: "Purchase",
+  SALE: "Sale",
+  PROCESSING_IN: "From Cutting",
+  PROCESSING_OUT: "Used in Cutting",
+  ADJUSTMENT_IN: "Stock Added",
+  ADJUSTMENT_OUT: "Stock Removed",
+  WASTE: "Waste / Damaged",
+  RETURN_IN: "Return from Customer",
+  RETURN_OUT: "Return to Supplier",
+};
+
+const REFERENCE_TYPE_LABEL: Record<string, string> = {
+  Purchase: "Purchase",
+  SalesOrder: "Sale",
+  SalesOrderCancel: "Sale (Cancelled)",
+  ProcessingBatch: "Cutting",
+  ProcessingBatchCancel: "Cutting (Cancelled)",
+};
 
 export default function InventoryHistoryPage() {
   const { hasRole } = useAuth();
@@ -110,10 +134,10 @@ export default function InventoryHistoryPage() {
           columns={[
             { header: "Date", render: (m) => formatDateTime(m.date) },
             { header: "Product", render: (m) => m.productName },
-            { header: "Type", render: (m) => m.movementType },
+            { header: "Type", render: (m) => MOVEMENT_TYPE_LABEL[m.movementType] ?? splitWords(m.movementType) },
             { header: "Quantity", render: (m) => `${m.quantity} ${m.unit}` },
             { header: "Stock After", render: (m) => m.stockAfter },
-            { header: "Reference", render: (m) => m.referenceType ?? "-" },
+            { header: "Reference", render: (m) => (m.referenceType ? REFERENCE_TYPE_LABEL[m.referenceType] ?? splitWords(m.referenceType) : "-") },
             { header: "Notes", render: (m) => m.notes ?? "-" },
           ]}
         />

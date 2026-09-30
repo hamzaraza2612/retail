@@ -18,9 +18,9 @@ const REPORTS: { key: ReportKey; label: string }[] = [
   { key: "sales-by-customer", label: "Sales by Customer" },
   { key: "sales-by-product", label: "Sales by Product" },
   { key: "purchases", label: "Purchases" },
-  { key: "receivables", label: "Customer Receivables / Outstanding" },
-  { key: "payables", label: "Supplier Payables" },
-  { key: "inventory", label: "Inventory / Closing Stock" },
+  { key: "receivables", label: "Customer Due" },
+  { key: "payables", label: "Supplier Due" },
+  { key: "inventory", label: "Stock Report" },
   { key: "expenses", label: "Expenses" },
   { key: "profit-summary", label: "Profit Summary (Monthly)" },
   { key: "payments", label: "Customer Payments" },
@@ -45,7 +45,7 @@ const SINGLE_DATE_REPORTS: ReportKey[] = ["daily-stock", "daily-profit"];
 const QUICK_REPORTS: ({ label: string } & ({ kind: "link"; to: string } | { kind: "report"; key: ReportKey }))[] = [
   { label: "Today's Business", kind: "link", to: "/" },
   { label: "Stock", kind: "link", to: "/inventory" },
-  { label: "Customer Outstanding", kind: "report", key: "receivables" },
+  { label: "Customer Due", kind: "report", key: "receivables" },
   { label: "Product Profit", kind: "report", key: "product-profit" },
   { label: "Processing/Yield", kind: "report", key: "yield" },
   { label: "Cash vs Credit", kind: "report", key: "cash-vs-credit" },
@@ -57,22 +57,26 @@ const QUICK_REPORTS: ({ label: string } & ({ kind: "link"; to: string } | { kind
 const quickReportClass =
   "flex items-center justify-center text-center font-semibold text-sm rounded-lg px-3 py-4 bg-green-600 text-white hover:bg-green-700 transition-colors";
 
-// Current costing is weight-based (see BUSINESS_WORKFLOW.md), so every profit-shaped number
-// this app produces is an estimate, never a full accounting-grade actual profit — these
-// overrides make sure the word "Estimated" is always attached to the label, not just buried
-// in a footnote. Applied to both the summary-card labels and the report-table column
-// headers below; nothing about the underlying figures changes.
-const PROFIT_LABEL_OVERRIDES: Record<string, string> = {
+// Two kinds of relabeling for these auto-generated column/summary headers: current costing
+// is weight-based (see BUSINESS_WORKFLOW.md), so every profit-shaped number this app
+// produces is an estimate, never a full accounting-grade actual profit — "Estimated" is
+// always attached to those labels, not just buried in a footnote. The rest just swap
+// accounting terms (Receivable/Payable/Outstanding) for the plain "Due" wording used
+// everywhere else in the app. Nothing about the underlying figures changes.
+const FIELD_LABEL_OVERRIDES: Record<string, string> = {
   grossProfit: "Estimated Gross Profit",
   totalCogs: "Estimated Cost of Goods Sold",
   estimatedCogs: "Estimated Cost of Goods Sold",
   estimatedCost: "Estimated Cost",
   operatingProfitLoss: "Estimated Operating Result",
   netEstimatedProfit: "Estimated Net Profit",
+  outstandingBalance: "Due",
+  outstandingReceivables: "Customer Due",
+  outstandingPayables: "Supplier Due",
 };
 
 function labelFor(key: string): string {
-  return PROFIT_LABEL_OVERRIDES[key] ?? key.replace(/([A-Z])/g, " $1").trim();
+  return FIELD_LABEL_OVERRIDES[key] ?? key.replace(/([A-Z])/g, " $1").trim();
 }
 
 const OBJECT_REPORT_META: Partial<Record<ReportKey, { title: string; note: string }>> = {

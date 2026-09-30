@@ -30,7 +30,7 @@ export default function ProcessingBatchesList() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Processing / Cutting</h1>
+          <h1 className="text-xl font-bold text-gray-900">Chicken Cutting</h1>
           <p className="text-sm text-gray-500">Turn raw chicken into finished cuts and track yield &amp; cost</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>+ New Cutting</Button>

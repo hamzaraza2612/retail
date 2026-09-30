@@ -163,7 +163,7 @@ export default function ReceivePaymentModal({ open, onClose, onSaved, customerId
           )}
 
           <div className="flex justify-between text-sm mt-3 mb-1">
-            <span className="text-gray-600">Current Outstanding</span>
+            <span className="text-gray-600">Current Due</span>
             <span className={`font-semibold ${outstandingBefore > 0 ? "text-red-600" : ""}`}>{formatMoney(outstandingBefore)}</span>
           </div>
 
@@ -182,10 +182,10 @@ export default function ReceivePaymentModal({ open, onClose, onSaved, customerId
           />
 
           <div className="mt-4 border-t pt-3 space-y-1 text-sm w-full sm:max-w-xs sm:ml-auto">
-            <div className="flex justify-between"><span className="text-gray-600">Outstanding Before</span><span className="font-medium">{formatMoney(outstandingBefore)}</span></div>
+            <div className="flex justify-between"><span className="text-gray-600">Due Before</span><span className="font-medium">{formatMoney(outstandingBefore)}</span></div>
             <div className="flex justify-between"><span className="text-gray-600">Payment</span><span className="font-medium text-green-700">− {formatMoney(amount)}</span></div>
             <div className="flex justify-between font-semibold text-base border-t pt-1">
-              <span>Outstanding After</span>
+              <span>Due After</span>
               <span className={outstandingAfter > 0 ? "text-red-600" : ""}>{formatMoney(outstandingAfter)}</span>
             </div>
           </div>

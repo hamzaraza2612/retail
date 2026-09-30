@@ -7,7 +7,7 @@ import { Card, StatCard } from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
 import ConfirmDialog from "../../components/ui/ConfirmDialog";
-import { formatDate, formatMoney } from "../../lib/format";
+import { formatDate, formatMoney, splitWords } from "../../lib/format";
 import { errorMessage } from "../../api/client";
 
 const NEXT_STATUS: Record<ProcessingBatchStatus, ProcessingBatchStatus[]> = {
@@ -33,7 +33,7 @@ export default function ProcessingBatchDetailPage() {
     setUpdating(true);
     try {
       await processingBatchesApi.updateStatus(batch.id, status);
-      toast.success(`Processing batch moved to ${status}`);
+      toast.success(`Cutting marked as ${splitWords(status)}`);
       setConfirmStatus(null);
       load();
     } catch (err) {
@@ -53,7 +53,7 @@ export default function ProcessingBatchDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <Link to="/processing" className="text-sm text-gray-500 hover:underline">&larr; Back to Processing</Link>
+          <Link to="/processing" className="text-sm text-gray-500 hover:underline">&larr; Back to Cutting</Link>
           <h1 className="text-xl font-bold text-gray-900 mt-1">{batch.batchNumber}</h1>
           <p className="text-sm text-gray-500">{formatDate(batch.processingDate)}</p>
         </div>
@@ -71,7 +71,7 @@ export default function ProcessingBatchDetailPage() {
       <div className="flex flex-wrap gap-2">
         {nextOptions.map((s) => (
           <Button key={s} variant={s === "Cancelled" ? "danger" : "primary"} disabled={updating} onClick={() => setConfirmStatus(s)}>
-            Mark as {s}
+            Mark as {splitWords(s)}
           </Button>
         ))}
       </div>
@@ -123,7 +123,7 @@ export default function ProcessingBatchDetailPage() {
 
       <ConfirmDialog
         open={!!confirmStatus}
-        title={`Mark batch as ${confirmStatus}`}
+        title={`Mark cutting as ${confirmStatus ? splitWords(confirmStatus) : ""}`}
         message={
           confirmStatus === "Completed"
             ? "This will deduct the raw material, produce the finished products, and allocate cost across them. Continue?"

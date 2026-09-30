@@ -125,7 +125,7 @@ export default function CustomersList() {
             ),
           },
           { header: "Type", render: (c) => c.customerType },
-          { header: "Outstanding", render: (c) => <span className={c.currentBalance > 0 ? "text-red-600 font-medium" : ""}>{formatMoney(c.currentBalance)}</span> },
+          { header: "Due", render: (c) => <span className={c.currentBalance > 0 ? "text-red-600 font-medium" : ""}>{formatMoney(c.currentBalance)}</span> },
           { header: "Phone", render: (c) => c.phone },
           {
             header: "Action",

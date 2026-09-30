@@ -25,13 +25,13 @@ function renderList() {
 }
 
 describe("CustomersList — table columns", () => {
-  it("shows exactly Customer, Type, Outstanding, Phone, Action", async () => {
+  it("shows exactly Customer, Type, Due, Phone, Action", async () => {
     (customersApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { items: [customer()], totalCount: 1 } });
     renderList();
     await screen.findByText("Restaurant XYZ");
 
     const headers = screen.getAllByRole("columnheader").map((h) => h.textContent);
-    expect(headers).toEqual(["Customer", "Type", "Outstanding", "Phone", "Action"]);
+    expect(headers).toEqual(["Customer", "Type", "Due", "Phone", "Action"]);
   });
 
   it("zero outstanding: shows the amount without the overdue highlight", async () => {
@@ -72,7 +72,7 @@ describe("CustomersList — new customer", () => {
   it("creates a new customer through the existing create flow", async () => {
     (customersApi.create as ReturnType<typeof vi.fn>).mockResolvedValue({ data: customer({ id: 2, businessName: "Green Valley Caterers" }) });
     renderList();
-    await screen.findByText("No records found.");
+    await screen.findByText("Nothing here yet.");
 
     await userEvent.click(screen.getByRole("button", { name: "+ New Customer" }));
     await userEvent.type(screen.getByLabelText("Business Name"), "Green Valley Caterers");

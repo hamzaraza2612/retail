@@ -5,7 +5,7 @@ import type { SalesOrder, SalesOrderStatus } from "../../api/types";
 import Table from "../../components/ui/Table";
 import Pagination from "../../components/ui/Pagination";
 import Button from "../../components/ui/Button";
-import { formatMoney, formatDate } from "../../lib/format";
+import { formatMoney, formatDate, splitWords } from "../../lib/format";
 import Badge from "../../components/ui/Badge";
 import NewSaleModal from "./NewSaleModal";
 
@@ -30,7 +30,7 @@ export default function OrdersList() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Sales Orders</h1>
+          <h1 className="text-xl font-bold text-gray-900">Sales</h1>
           <p className="text-sm text-gray-500">Customer orders, from draft to delivery</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>+ New Sale</Button>
@@ -39,7 +39,7 @@ export default function OrdersList() {
       <div className="mb-3">
         <select className="border border-gray-300 rounded-md px-3 py-2 text-sm" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
           <option value="">All Statuses</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          {STATUSES.map((s) => <option key={s} value={s}>{splitWords(s)}</option>)}
         </select>
       </div>
 

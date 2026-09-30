@@ -47,7 +47,7 @@ beforeEach(() => {
 });
 
 describe("ReceivePaymentModal — customer picker", () => {
-  it("excludes the Walk-in/Cash Customer and shows Current Outstanding once a customer is picked", async () => {
+  it("excludes the Walk-in/Cash Customer and shows Current Due once a customer is picked", async () => {
     renderPicker();
     await screen.findByLabelText("Customer");
 
@@ -56,23 +56,23 @@ describe("ReceivePaymentModal — customer picker", () => {
     await userEvent.selectOptions(screen.getByLabelText("Customer"), String(hotelCustomer.id));
 
     await waitFor(() => {
-      expect(screen.getByText("Current Outstanding").closest("div")).toHaveTextContent("Rs. 10,000");
+      expect(screen.getByText("Current Due").closest("div")).toHaveTextContent("Rs. 10,000");
       expect(screen.getByLabelText("Payment Amount")).toHaveValue(10000); // defaults to full outstanding
     });
   });
 });
 
 describe("ReceivePaymentModal — live preview", () => {
-  it("shows Outstanding Before, Payment and Outstanding After as the amount changes", async () => {
+  it("shows Due Before, Payment and Due After as the amount changes", async () => {
     renderFixed();
     await screen.findByText("Restaurant XYZ");
 
     await userEvent.clear(screen.getByLabelText("Payment Amount"));
     await userEvent.type(screen.getByLabelText("Payment Amount"), "4000");
 
-    expect(screen.getByText("Outstanding Before").closest("div")).toHaveTextContent("Rs. 10,000");
+    expect(screen.getByText("Due Before").closest("div")).toHaveTextContent("Rs. 10,000");
     expect(screen.getByText("Payment").closest("div")).toHaveTextContent("Rs. 4,000");
-    expect(screen.getByText("Outstanding After").closest("div")).toHaveTextContent("Rs. 6,000");
+    expect(screen.getByText("Due After").closest("div")).toHaveTextContent("Rs. 6,000");
   });
 });
 

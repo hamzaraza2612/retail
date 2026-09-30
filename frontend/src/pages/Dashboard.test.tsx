@@ -76,7 +76,7 @@ describe("Dashboard (Today's Business)", () => {
 
     expect(await screen.findByText("Today's Business")).toBeInTheDocument();
     for (const label of [
-      "Today's Sales", "Cash Received", "Credit Sales", "Customer Outstanding",
+      "Today's Sales", "Cash Received", "Credit Sales", "Customer Due",
       "Raw Chicken Stock", "Finished Product Stock", "Today's Processing",
       "Today's Expenses", "Estimated Gross Profit", "Estimated Operating Result",
     ]) {

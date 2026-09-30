@@ -52,7 +52,7 @@ beforeEach(() => {
 });
 
 describe("CustomerDetailPage — existing customer", () => {
-  it("shows Total Sales, Total Paid, Outstanding and Last Sale", async () => {
+  it("shows Total Sales, Total Paid, Amount Due and Last Sale", async () => {
     (customersApi.get as ReturnType<typeof vi.fn>).mockResolvedValue({ data: detail() });
     (customersApi.statement as ReturnType<typeof vi.fn>).mockResolvedValue({ data: { openingBalance: 0, closingBalance: 8000, rows: [] } });
 
@@ -61,7 +61,7 @@ describe("CustomerDetailPage — existing customer", () => {
 
     expect(screen.getByText("Total Sales").closest("div")).toHaveTextContent("Rs. 42,000");
     expect(screen.getByText("Total Paid").closest("div")).toHaveTextContent("Rs. 34,000");
-    expect(screen.getByText("Outstanding").closest("div")).toHaveTextContent("Rs. 8,000");
+    expect(screen.getByText("Amount Due").closest("div")).toHaveTextContent("Rs. 8,000");
     expect(screen.getByText("Last Sale").closest("div")).toHaveTextContent("6 sales total");
   });
 });
@@ -108,7 +108,7 @@ describe("CustomerDetailPage — zero outstanding", () => {
     renderDetail();
     await screen.findByText("Restaurant XYZ");
 
-    const outstandingBlock = screen.getByText("Outstanding").closest("div") as HTMLElement;
+    const outstandingBlock = screen.getByText("Amount Due").closest("div") as HTMLElement;
     expect(within(outstandingBlock).getByText("Rs. 0").className).not.toContain("text-red-600");
     const currentDueBlock = screen.getByText("Current Due").closest("div") as HTMLElement;
     expect(within(currentDueBlock).getByText("Rs. 0").className).not.toContain("text-red-600");
@@ -123,7 +123,7 @@ describe("CustomerDetailPage — outstanding balance", () => {
     renderDetail();
     await screen.findByText("Restaurant XYZ");
 
-    const outstandingBlock = screen.getByText("Outstanding").closest("div") as HTMLElement;
+    const outstandingBlock = screen.getByText("Amount Due").closest("div") as HTMLElement;
     expect(within(outstandingBlock).getByText("Rs. 8,000").className).toContain("text-red-600");
     const currentDueBlock = screen.getByText("Current Due").closest("div") as HTMLElement;
     expect(within(currentDueBlock).getByText("Rs. 8,000").className).toContain("text-red-600");
